@@ -6,4 +6,6 @@ public interface IHallService
 {
     Guid AddHall(HallDto hall);
     IEnumerable<HallDto> GetAvailableHalls(int minCapacity);
+
+    public BookingResponse BookHall(BookingRequest request);
 }

@@ -4,16 +4,14 @@ using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Реєстрація сервісу як Singleton (оскільки ми зберігаємо дані в пам'яті)
 builder.Services.AddSingleton<IHallService, HallService>();
 
 var app = builder.Build();
 
-// Групування маршрутів для версії API
 var hallsApi = app.MapGroup("/api/v1/halls");
 
-// 1. Додавання конференц-залу (використовуємо лямбда-вираз => замість delegate)
-hallsApi.MapPost("/", ([FromBody] HallDto hall, IHallService hallService) =>
+// 1. Додавання залу
+hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
     var id = hallService.AddHall(hall);
     return Results.Created($"/api/v1/halls/{id}", new
@@ -23,14 +21,27 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, IHallService hallService) =>
     });
 });
 
-// 2. Пошук доступних залів
-hallsApi.MapGet("/", ([FromQuery] int minCapacity, IHallService hallService) =>
+// 2. Пошук залів
+hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromServices] IHallService hallService) =>
 {
     var halls = hallService.GetAvailableHalls(minCapacity);
     return Results.Ok(halls);
 });
 
+// 3. Бронювання та розрахунок вартості
+hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHallService hallService) =>
+{
+    try
+    {
+        var response = hallService.BookHall(request);
+        return Results.Ok(response);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Error = ex.Message });
+    }
+});
+
 app.Run();
 
-// Робимо клас Program публічним, щоб до нього мали доступ проєкти з інтеграційними тестами
 public partial class Program { }
