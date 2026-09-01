@@ -90,17 +90,6 @@ dotnet test
 * **Архітектура:** Minimal APIs, Service-based architecture
 * **Тестування:** xUnit
 
-## 🔒 Безпека, ролі та надійність
-
-Проєкт реалізує захист передачі даних за допомогою **HTTPS**, глобальну обробку помилок, валідацію вхідних даних та багаторівневу авторизацію (**RBAC**) на основі **JWT**.
-
-* **Безпека передачі даних:** Увесь трафік примусово шифрується та перенаправляється через HTTPS (`app.UseHttpsRedirection()`).
-* **Автентифікація та авторизація:** Використання JWT-токенів для ідентифікації користувачів.
-* **Глобальна обробка винятків:** Захищає від витоку системних даних та повертає клієнту чіткі JSON-відповіді про помилки замість падіння сервера.
-* **Валідація вхідних даних:** Запобігає передачі некоректних значень (від'ємні ціни, порожні назви, хибні часові інтервали).
-* **Контроль цілісності:** Перевірка часових колізій для уникнення подвійного бронювання залів.
-
-<<<<<<< HEAD
 ### Рівні доступу (RBAC):
 =======
 ## 🔒 Безпека та авторизація
@@ -118,7 +107,6 @@ dotnet test
 Проєкт реалізує захист передачі даних за допомогою **HTTPS**, глобальну обробку помилок та багаторівневу авторизацію (**RBAC**) на основі **JWT**.
 
 ### Рівні доступу:
->>>>>>> 6870c8d8f3d5bc9ad4cef03499b14d307735b37e
 * **Публічний доступ:** Перегляд та пошук доступних залів (`GET /api/v1/halls`).
 * **Зареєстровані користувачі (`User`):** Оформлення бронювань (`POST /api/v1/halls/book`).
 * **Адміністратори (`AdminOnly`):** Додавання/видалення залів (`POST/DELETE /api/v1/halls`) та перегляд звітності й аналітики (`GET /api/v1/analytics/summary`).
@@ -127,7 +115,6 @@ dotnet test
 
 ## 🔑 Тестові токени для Postman
 
-<<<<<<< HEAD
 Для тестування захищених ендпоінтів додайте заголовок `Authorization: Bearer <TOKEN>`, використовуючи один із наведених нижче токенів (копіюйте рядок повністю разом із крапками).
 
 > ✅ Ці токени підписані реальним ключем `SuperSecretKey12345678901234567890`, що вказаний у `Program.cs`, тому проходять повну валідацію (підпис, issuer, audience, роль, термін дії) і готові до використання в Postman без додаткових налаштувань.
@@ -137,12 +124,3 @@ dotnet test
 
 ### 👤 2. Токен Звичайного Користувача (доступ до бронювання)
 `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLWlkLTAwMiIsIm5hbWUiOiJSZWd1bGFyIENsaWVudCIsInJvbGUiOiJVc2VyIiwibmJmIjoxNzU2ODgyNTc4LCJleHAiOjIwNzI0ODI1NzgsImlzcyI6IkhhbGxSZW50YWxBUEkiLCJhdWQiOiJIYWxsUmVudGFsQ2xpZW50In0.VbDhiYpOEICHHp4U2oBb94BiXgN5DjWC0_Hz7vrEoaY`
-=======
-Для тестування захищених ендпоінтів додайте заголовок `Authorization: Bearer <TOKEN>`, використовуючи один із наведених нижче токенів (копіюйте рядок повністю разом із крапками):
-
-### 🛡️ 1. Токен Адміністратора (повний доступ)
-`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbi1pZC0wMDEiLCJuYW1lIjoiQWRtaW4gVXNlciIsI3JvbGUiOiJBZG1pbiIsIm5iZiI6MTc1Njg4MjU3OCwiZXhwIjoyMDcyNDgyNTc4LCJpc3MiOiJIYWxsUmVudGFsQVBJIiwiYXVkIjoiSGFsbFJlbnRhbENsaWVudCJ9.V5ZtN2Yq7b3Xl6K9m8p4s1w0v2x5c8f1g4h7j0k3l6z`
-
-### 👤 2. Токен Звичайного Користувача (доступ до бронювання)
-`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLWlkLTAwMiIsIm5hbWUiOiJSZWd1bGFyIENsaWVudCIsIm5iZiI6MTc1Njg4MjU3OCwiZXhwIjoyMDcyNDgyNTc4LCJpc3MiOiJIYWxsUmVudGFsQVBJIiwiYXVkIjoiSGFsbFJlbnRhbENsaWVudCJ9.X1c3v5b7n9m2k4j6h8g0f2d4s6a8p0o2i4u6y8t0r2e`
->>>>>>> 6870c8d8f3d5bc9ad4cef03499b14d307735b37e
