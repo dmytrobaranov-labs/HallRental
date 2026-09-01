@@ -18,7 +18,7 @@ This project is a first-version (v1) Minimal API built with ASP.NET Core for man
 ### Getting Started
 
 #### Prerequisites
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
 
 #### Run the Application
 1. Clone the repository:
@@ -66,7 +66,7 @@ This project is a first-version (v1) Minimal API built with ASP.NET Core for man
 ### Як запустити
 
 #### Вимоги
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
 
 #### Запуск програми
 1. Склонуйте репозиторій:
