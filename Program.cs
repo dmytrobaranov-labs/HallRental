@@ -1,97 +1,139 @@
-using System.Reflection;
 using HallRental.API.Models;
 using HallRental.API.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
-});
-
+// Реєструємо сервіси у контейнері залежностей (Dependency Injection)
 builder.Services.AddSingleton<IHallService, HallService>();
+
+// ==========================================
+// НАЛАШТУВАННЯ ВАЛІДАЦІЇ JWT-ТОКЕНІВ
+// ==========================================
+var secretKey = "SuperSecretKey12345678901234567890";
+var key = Encoding.UTF8.GetBytes(secretKey);
+
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = "HallRentalAPI",
+            ValidAudience = "HallRentalClient",
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            // Вказуємо, що роль у токені зберігається в полі "role"
+            RoleClaimType = "role"
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    // Політика для обмеження доступу тільки для адміністраторів
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("Admin"));
+});
 
 var app = builder.Build();
 
+// ==========================================
+// 1. БЕЗПЕКА ТА ГЛОБАЛЬНА ОБРОБКА ПОМИЛОК
+// ==========================================
+
+// Примусове перенаправлення всього трафіку через безпечний протокол HTTPS
+app.UseHttpsRedirection();
+
+// Глобальна обробка винятків (запобігає витоку технічного стек-трейсу)
 app.UseExceptionHandler(exceptionHandlerApp =>
 {
     exceptionHandlerApp.Run(async context =>
     {
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
         context.Response.ContentType = "application/json";
 
         var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
         if (exceptionFeature != null)
         {
-            var errorMessage = exceptionFeature.Error.Message;
+            context.Response.StatusCode = exceptionFeature.Error switch
+            {
+                KeyNotFoundException => StatusCodes.Status404NotFound,
+                ArgumentException => StatusCodes.Status400BadRequest,
+                _ => StatusCodes.Status500InternalServerError
+            };
 
-            // Повертаємо безпечне та зрозуміле повідомлення клієнту
-            var errorResponse = new { error = errorMessage };
+            var errorResponse = new { error = exceptionFeature.Error.Message };
             await context.Response.WriteAsJsonAsync(errorResponse);
         }
     });
 });
 
-app.UseSwagger();
-app.UseSwaggerUI();
+// Підключаємо конвеєр автентифікації та авторизації
+app.UseAuthentication();
+app.UseAuthorization();
+
+// ==========================================
+// 2. МАРШРУТИЗАЦІЯ (MINIMAL APIS)
+// ==========================================
 
 var hallsApi = app.MapGroup("/api/v1/halls");
 
-hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hallService) =>
+/// <summary>
+/// Публічний пошук доступних залів (не потребує токена).
+/// </summary>
+hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromQuery] DateTime? startTime, [FromQuery] DateTime? endTime, [FromServices] IHallService hallService) =>
 {
-    var id = hallService.Add(hall);
-    return Results.Created($"/api/v1/halls/{id}", new { Message = "Конференц-зал успішно створено", Data = new { hall_id = id } });
-})
-.WithSummary("Створення нового конференц-залу")
-.WithDescription("Додає новий зал із заданою місткістю, базовою ціною та переліком послуг до системи.");
-
-hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromServices] IHallService hallService) =>
-{
-    var halls = hallService.GetAvailable(minCapacity);
+    var halls = hallService.GetAvailable(minCapacity, startTime, endTime);
     return Results.Ok(halls);
 })
 .WithSummary("Пошук доступних залів")
-.WithDescription("Повертає список залів, які вміщують вказану або більшу кількість осіб.");
+.WithDescription("Доступно публічно без автентифікації.");
 
+/// <summary>
+/// Додавання нового залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
+/// </summary>
+hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hallService) =>
+{
+    var id = hallService.Add(hall);
+    return Results.Created($"/api/v1/halls/{id}", new { Id = id });
+})
+.RequireAuthorization("AdminOnly")
+.WithSummary("Додати новий зал")
+.WithDescription("Вимагає токена з роллю Admin.");
+
+/// <summary>
+/// Видалення залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
+/// </summary>
+hallsApi.MapDelete("{id:guid}", (Guid id, [FromServices] IHallService hallService) =>
+{
+    var deleted = hallService.Delete(id);
+    if (!deleted) return Results.NotFound(new { error = "Зал не знайдено" });
+    return Results.NoContent();
+})
+.RequireAuthorization("AdminOnly")
+.WithSummary("Видалити зал")
+.WithDescription("Вимагає токена з роллю Admin.");
+
+/// <summary>
+/// Оформлення бронювання — ДЛЯ ЗАРЕЄСТРОВАНИХ ЮЗЕРІВ (та адміністраторів).
+/// </summary>
 hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHallService hallService) =>
 {
-    try
-    {
-        var response = hallService.Book(request);
-        return Results.Ok(response);
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest(new { Error = ex.Message });
-    }
+    var response = hallService.Book(request);
+    return Results.Ok(response);
 })
-.WithSummary("Бронювання залу та розрахунок вартості")
-.WithDescription("Оформлює бронювання на вказаний час та автоматично підраховує загальну вартість оренди з урахуванням послуг.");
+.RequireAuthorization()
+.WithSummary("Забронювати зал")
+.WithDescription("Вимагає наявності валідного JWT-токена.");
 
-hallsApi.MapPut("/{id:guid}", ([FromRoute] Guid id, [FromBody] HallDto updatedHall, [FromServices] IHallService hallService) =>
-{
-    var success = hallService.Update(id, updatedHall);
-    return success
-        ? Results.Ok(new { Message = "Зал успішно оновлено" })
-        : Results.NotFound(new { Error = "Зал не знайдено" });
-})
-.WithSummary("Редагування інформації про зал")
-.WithDescription("Оновлює дані існуючого залу (наприклад, зміна вартості оренди або додавання послуг).");
-
-hallsApi.MapDelete("/{id:guid}", ([FromRoute] Guid id, [FromServices] IHallService hallService) =>
-{
-    var success = hallService.Delete(id);
-    return success
-        ? Results.Ok(new { Message = "Зал успішно видалено" })
-        : Results.NotFound(new { Error = "Зал не знайдено" });
-})
-.WithSummary("Видалення конференц-залу")
-.WithDescription("Видаляє зал із системи за його унікальним ідентифікатором.");
-
-var analyticsApi = app.MapGroup("/api/v1/analytics");
+/// <summary>
+/// Бізнес-аналітика та звітність — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
+/// </summary>
+var analyticsApi = app.MapGroup("/api/v1/analytics").RequireAuthorization("AdminOnly");
 
 analyticsApi.MapGet("/summary", ([FromServices] IHallService hallService) =>
 {
@@ -99,7 +141,7 @@ analyticsApi.MapGet("/summary", ([FromServices] IHallService hallService) =>
     return Results.Ok(summary);
 })
 .WithSummary("Отримання зведеної аналітики")
-.WithDescription("Повертає загальну кількість бронювань, сумарний дохід та найпопулярніший зал.");
+.WithDescription("Вимагає токена з роллю Admin.");
 
 app.Run();
 
