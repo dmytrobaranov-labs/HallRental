@@ -40,6 +40,14 @@ public interface IHallService
     bool Update(Guid id, HallDto updatedHall);
 
     /// <summary>
+    /// Додає одну додаткову послугу до наявного списку послуг залу (без видалення інших).
+    /// </summary>
+    /// <param name="hallId">Унікальний ідентифікатор залу.</param>
+    /// <param name="accessory">Послуга, яку потрібно додати (назва та ціна).</param>
+    /// <returns>True, якщо послугу додано; False, якщо зал не знайдено.</returns>
+    bool AddAccessory(Guid hallId, AccessoryDto accessory);
+
+    /// <summary>
     /// Видаляє конференц-зал із системи за його ідентифікатором.
     /// </summary>
     /// <param name="id">Унікальний ідентифікатор залу.</param>

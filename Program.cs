@@ -106,6 +106,38 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
 .WithDescription("Вимагає токена з роллю Admin.");
 
 /// <summary>
+/// Редагування залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
+/// Дозволяє змінити ціну оренди, місткість та список додаткових послуг.
+/// УВАГА: Accessories повністю ЗАМІНЮЄТЬСЯ, а не доповнюється — щоб додати нову
+/// послугу (наприклад, "Звук" за 700 грн), у тілі запиту потрібно передати
+/// повний список послуг залу (наявні + нова), інакше старі буде втрачено.
+/// </summary>
+hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] IHallService hallService) =>
+{
+    var updated = hallService.Update(id, hall);
+    if (!updated) return Results.NotFound(new { error = "Зал не знайдено" });
+    return Results.Ok(new { message = "Дані залу успішно оновлено" });
+})
+.RequireAuthorization("AdminOnly")
+.WithSummary("Оновити дані залу")
+.WithDescription("Вимагає токена з роллю Admin. Accessories передається повним списком (заміна, не додавання).");
+
+/// <summary>
+/// Додавання послуги до залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
+/// На відміну від PUT /{id}, додає одну послугу, не зачіпаючи решту списку.
+/// Якщо послуга з такою назвою вже існує — оновлює її ціну.
+/// </summary>
+hallsApi.MapPost("/{id:guid}/accessories", (Guid id, [FromBody] AccessoryDto accessory, [FromServices] IHallService hallService) =>
+{
+    var added = hallService.AddAccessory(id, accessory);
+    if (!added) return Results.NotFound(new { error = "Зал не знайдено" });
+    return Results.Ok(new { message = "Послугу успішно додано" });
+})
+.RequireAuthorization("AdminOnly")
+.WithSummary("Додати послугу до залу")
+.WithDescription("Вимагає токена з роллю Admin. Додає одну послугу без заміни решти списку.");
+
+/// <summary>
 /// Видалення залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
 /// </summary>
 hallsApi.MapDelete("{id:guid}", (Guid id, [FromServices] IHallService hallService) =>

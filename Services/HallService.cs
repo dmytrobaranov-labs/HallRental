@@ -129,6 +129,35 @@ public class HallService : IHallService
     }
 
     /// <summary>
+    /// Додає одну додаткову послугу до наявного списку послуг залу (без видалення інших).
+    /// </summary>
+    public bool AddAccessory(Guid hallId, AccessoryDto accessory)
+    {
+        var hall = _halls.FirstOrDefault(h => h.Id == hallId);
+        if (hall == null)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(accessory.Name))
+            throw new ArgumentException("Назва послуги не може бути порожньою");
+
+        if (accessory.Price < 0)
+            throw new ArgumentException("Вартість послуги не може бути від'ємною");
+
+        // Якщо послуга з такою назвою вже є — оновлюємо ціну замість дублювання
+        var existing = hall.Accessories.FirstOrDefault(a => a.Name == accessory.Name);
+        if (existing != null)
+        {
+            existing.Price = accessory.Price;
+        }
+        else
+        {
+            hall.Accessories.Add(accessory);
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Видаляє конференц-зал із системи за його ідентифікатором.
     /// </summary>
     public bool Delete(Guid id)
