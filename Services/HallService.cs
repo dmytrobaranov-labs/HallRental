@@ -22,6 +22,16 @@ public class HallService : IHallService
     /// </summary>
     public Guid Add(HallDto hall)
     {
+        // Валідація вхідних даних для залу
+        if (string.IsNullOrWhiteSpace(hall.Name))
+            throw new ArgumentException("Назва залу не може бути порожньою");
+
+        if (hall.Capacity <= 0)
+            throw new ArgumentException("Місткість залу має бути більшою за нуль");
+
+        if (hall.BasePricePerHour < 0)
+            throw new ArgumentException("Базова ціна не може бути від'ємною");
+
         hall.Id = Guid.NewGuid();
         _halls.Add(hall);
         return hall.Id;
@@ -54,12 +64,18 @@ public class HallService : IHallService
     /// <summary>
     /// Оформлює бронювання залу з перевіркою колізій та розрахунком вартості за динамічним тарифом.
     /// </summary>
+    /// <param name="request">Дані запиту на бронювання (зал, час, послуги).</param>
+    /// <returns>Результат бронювання із загальною сумою та ідентифікатором.</returns>
     public BookingResponse Book(BookingRequest request)
     {
+        // Валідація вхідних даних
+        if (request.HallId == Guid.Empty)
+            throw new ArgumentException("Не вказано ідентифікатор залу");
+
         // Перевіряємо, чи існує зал
         var hall = _halls.FirstOrDefault(h => h.Id == request.HallId);
         if (hall == null)
-            throw new Exception("Зал не знайдено");
+            throw new KeyNotFoundException("Зал не знайдено");
 
         // Перевіряємо коректність введеного часу
         ValidateBookingTime(request.StartTime, request.EndTime);
@@ -89,7 +105,7 @@ public class HallService : IHallService
             Message = "Бронювання успішне з урахуванням динамічного тарифу"
         };
 
-        // Зберігаємо бронювання в історії для запобігання майбутнім колізіям
+        // Зберігаємо бронювання в історії для запобігання майбутнім колізіям та аналітики
         _bookings.Add((request, response));
 
         return response;

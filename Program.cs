@@ -16,6 +16,25 @@ builder.Services.AddSingleton<IHallService, HallService>();
 
 var app = builder.Build();
 
+app.UseExceptionHandler(exceptionHandlerApp =>
+{
+    exceptionHandlerApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        context.Response.ContentType = "application/json";
+
+        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (exceptionFeature != null)
+        {
+            var errorMessage = exceptionFeature.Error.Message;
+
+            // Повертаємо безпечне та зрозуміле повідомлення клієнту
+            var errorResponse = new { error = errorMessage };
+            await context.Response.WriteAsJsonAsync(errorResponse);
+        }
+    });
+});
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
