@@ -72,6 +72,16 @@ hallsApi.MapDelete("/{id:guid}", ([FromRoute] Guid id, [FromServices] IHallServi
 .WithSummary("Видалення конференц-залу")
 .WithDescription("Видаляє зал із системи за його унікальним ідентифікатором.");
 
+var analyticsApi = app.MapGroup("/api/v1/analytics");
+
+analyticsApi.MapGet("/summary", ([FromServices] IHallService hallService) =>
+{
+    var summary = hallService.GetAnalyticsSummary();
+    return Results.Ok(summary);
+})
+.WithSummary("Отримання зведеної аналітики")
+.WithDescription("Повертає загальну кількість бронювань, сумарний дохід та найпопулярніший зал.");
+
 app.Run();
 
 public partial class Program { }

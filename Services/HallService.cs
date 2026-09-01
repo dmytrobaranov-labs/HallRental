@@ -168,4 +168,37 @@ public class HallService : IHallService
             .Where(a => selectedAccessories.Contains(a.Name))
             .Sum(a => a.Price);
     }
+
+    /// <summary>
+    /// Генерує зведену аналітичну звітність щодо загальної кількості бронювань, 
+    /// сумарного доходу та найпопулярнішого залу.
+    /// </summary>
+    public AnalyticsSummaryDto GetAnalyticsSummary()
+    {
+        // Якщо жодного бронювання ще не було, повертаємо базову структуру за замовчуванням
+        if (!_bookings.Any())
+        {
+            return new AnalyticsSummaryDto();
+        }
+
+        // Сумуємо дохід з усіх успішних бронювань
+        var totalRevenue = _bookings.Sum(b => b.Response.TotalCost);
+
+        // Групуємо за ідентифікатором залу, щоб знайти найпопулярніший за кількістю замовлень
+        var popularHallId = _bookings
+            .GroupBy(b => b.Request.HallId)
+            .OrderByDescending(g => g.Count())
+            .First()
+            .Key;
+
+        var popularHall = _halls.FirstOrDefault(h => h.Id == popularHallId);
+
+        return new AnalyticsSummaryDto
+        {
+            TotalBookings = _bookings.Count,
+            TotalRevenue = totalRevenue,
+            MostPopularHall = popularHall?.Name ?? "Невідомо"
+        };
+    }
+
 }

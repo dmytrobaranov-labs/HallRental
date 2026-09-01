@@ -1,101 +1,50 @@
-# HallRental.API / API для управління конференц-залами
+# 🏢 Conference Hall Rental API
 
-🌍 **Choose language / Оберіть мову:**
-- [English](#english)
-- [Українська](#українська)
+Розподілений або монолітний API-застосунок на **.NET 10** для управління орендою конференц-залів, розрахунку динамічних тарифів, запобігання колізіям бронювання та ведення бізнес-аналітики й звітності. Проєкт розроблено за принципами **Clean Code**, **SOLID** та методологією **TDD (Test-Driven Development)**.
 
 ---
 
-## English <a name="english"></a>
+## 🚀 Основні можливості
 
-### About the Project
-This project is a first-version (v1) Minimal API built with ASP.NET Core for managing conference rooms (Halls), initially based on the requirements from "API для управління залами,  бронюваннями та розрахунку вартості оренди" [cite: There is a file you can reference named "API для управління залами,  бронюваннями та розрахунку вартості оренди". Refer to this file by its name verbatim.]. Currently, it uses in-memory data storage and is designed with a Service Layer architecture.
-
-### Features (First Commit)
-- **Add a Conference Hall:** Define capacity, base hourly rate, and additional accessories (e.g., Projector, Wi-Fi).
-- **Find Available Halls:** Filter rooms by minimum capacity.
-
-### Getting Started
-
-#### Prerequisites
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
-
-#### Run the Application
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   ```
-2. Navigate to the project directory and run:
-   ```bash
-   dotnet run
-   ```
-3. The API will be available at `http://localhost:<port>`.
-
-### API Endpoints
-
-#### 1. Add a Hall
-`POST /api/v1/halls`
-
-**Request Body:**
-```json
-{
-  "name": "Room A",
-  "capacity": 50,
-  "basePricePerHour": 2000,
-  "accessories": [
-    { "name": "Projector", "price": 500 },
-    { "name": "Wi-Fi", "price": 300 }
-  ]
-}
-```
-
-#### 2. Get Available Halls
-`GET /api/v1/halls?minCapacity=30`
+* **Управління залами (CRUD):** 
+  * Додавання нових залів із базовою ціною та місткістю.
+  * Редагування (`PUT`) та видалення (`DELETE`) існуючих залів.
+* **Інтелектуальне бронювання та захист від колізій:**
+  * Перевірка зайнятості: система блокує спроби забронювати один і той самий зал на час, що перетинається з уже наявними замовленнями.
+  * Валідація коректності часових інтервалів (`StartTime < EndTime`).
+* **Динамічне ціноутворення (`PricingCalculator`):**
+  * **Ранкові години (06:00 – 09:00):** знижка 10% (`-10%`).
+  * **Пікові години (12:00 – 14:00):** націнка 15% (`+15%`).
+  * **Вечірні години (18:00 – 23:00):** знижка 20% (`-20%`).
+  * **Стандартні години (інший час):** базова вартість.
+* **Пошук доступних залів:** Фільтрація за місткістю та вільними часовими проміжками.
+* **Бізнес-аналітика та звітність:** Ендпоінт для отримання зведеної статистики (загальна кількість бронювань, сумарний дохід та найпопулярніший зал).
 
 ---
 
-## Українська <a name="українська"></a>
+## 📡 Основні API Ендпоінти
 
-### Про проєкт
-Цей проєкт є першою частиною системи, що розробляється на базі завдання "API для управління залами,  бронюваннями та розрахунку вартості оренди" [cite: There is a file you can reference named "API для управління залами,  бронюваннями та розрахунку вартості оренди". Refer to this file by its name verbatim.]. Він побудований на ASP.NET Core (Minimal API). Наразі використовується зберігання даних у пам'яті (in-memory).
+| Метод | Маршрут | Опис |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/halls` | Додавання нового конференц-залу |
+| `GET` | `/api/v1/halls` | Пошук доступних залів (фільтр за місткістю та часом) |
+| `PUT` | `/api/v1/halls/{id}` | Оновлення даних залу |
+| `DELETE` | `/api/v1/halls/{id}` | Видалення залу |
+| `POST` | `/api/v1/halls/book` | Оформлення бронювання з розрахунком динамічного тарифу |
+| `GET` | `/api/v1/analytics/summary` | Отримання зведеного звіту та бізнес-аналітики |
 
-### Основний функціонал (Перший коміт)
-- **Додавання конференц-залу:** Встановлення місткості, базової вартості за годину та додаткових послуг (наприклад, Проєктор, Wi-Fi).
-- **Пошук доступних залів:** Фільтрація залів за мінімальною місткістю.
+---
 
-### Як запустити
+## 🧪 Тестування
 
-#### Вимоги
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+Проєкт покритий модульними (**Unit Tests**) та параметризованими тестами (`[Theory]`) з використанням бібліотеки **xUnit**.
 
-#### Запуск програми
-1. Склонуйте репозиторій:
-   ```bash
-   git clone <repository-url>
-   ```
-2. Перейдіть до папки проєкту та виконайте команду:
-   ```bash
-   dotnet run
-   ```
-3. API буде доступне за адресою `http://localhost:<port>`.
+Для запуску тестів виконайте в терміналі:
+```bash
+dotnet test
+---
 
-### API Ендпоінти
-
-#### 1. Додавання залу
-`POST /api/v1/halls`
-
-**Тіло запиту:**
-```json
-{
-  "name": "Зал А",
-  "capacity": 50,
-  "basePricePerHour": 2000,
-  "accessories": [
-    { "name": "Проєктор", "price": 500 },
-    { "name": "Wi-Fi", "price": 300 }
-  ]
-}
-```
-
-#### 2. Пошук залів
-`GET /api/v1/halls?minCapacity=30`
+## 🛠 Технології
+* **Платформа:** .NET 10 (C#)
+* **Архітектура:** Minimal APIs, Service-based architecture
+* **Тестування:** xUnit

@@ -45,4 +45,9 @@ public interface IHallService
     /// <param name="id">Унікальний ідентифікатор залу.</param>
     /// <returns>True, якщо видалення успішне; False, якщо зал не знайдено.</returns>
     bool Delete(Guid id);
+
+    /// <summary>
+    /// Отримання зведеної бізнес-аналітики.
+    /// </summary>
+    AnalyticsSummaryDto GetAnalyticsSummary();
 }
