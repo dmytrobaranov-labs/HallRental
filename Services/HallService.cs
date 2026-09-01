@@ -6,19 +6,19 @@ public class HallService : IHallService
 {
     private readonly List<HallDto> _halls = new();
 
-    public Guid AddHall(HallDto hall)
+    public Guid Add(HallDto hall)
     {
         hall.Id = Guid.NewGuid();
         _halls.Add(hall);
         return hall.Id;
     }
 
-    public IEnumerable<HallDto> GetAvailableHalls(int minCapacity)
+    public IEnumerable<HallDto> GetAvailable(int minCapacity)
     {
         return _halls.Where(h => h.Capacity >= minCapacity);
     }
 
-    public BookingResponse BookHall(BookingRequest request)
+    public BookingResponse Book(BookingRequest request)
     {
         var hall = _halls.FirstOrDefault(h => h.Id == request.HallId);
         if (hall == null) throw new Exception("Зал не знайдено");
@@ -38,5 +38,27 @@ public class HallService : IHallService
             TotalCost = hallCost + accessoriesCost,
             Message = "Бронювання успішне"
         };
+    }
+
+    public bool Update(Guid id, HallDto updatedHall)
+    {
+        var hall = _halls.FirstOrDefault(h => h.Id == id);
+        if (hall == null) return false;
+
+        hall.Name = updatedHall.Name;
+        hall.Capacity = updatedHall.Capacity;
+        hall.BasePricePerHour = updatedHall.BasePricePerHour;
+        hall.Accessories = updatedHall.Accessories;
+
+        return true;
+    }
+
+    public bool Delete(Guid id)
+    {
+        var hall = _halls.FirstOrDefault(h => h.Id == id);
+        if (hall == null) return false;
+
+        _halls.Remove(hall);
+        return true;
     }
 }

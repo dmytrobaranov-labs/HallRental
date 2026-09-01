@@ -6,8 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
-
-// Налаштування Swagger для читання XML-коментарів
 builder.Services.AddSwaggerGen(options =>
 {
     var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -23,10 +21,9 @@ app.UseSwaggerUI();
 
 var hallsApi = app.MapGroup("/api/v1/halls");
 
-// Використовуємо .WithSummary() та .WithDescription() для Minimal API ендпоінтів
 hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
-    var id = hallService.AddHall(hall);
+    var id = hallService.Add(hall);
     return Results.Created($"/api/v1/halls/{id}", new { Message = "Конференц-зал успішно створено", Data = new { hall_id = id } });
 })
 .WithSummary("Створення нового конференц-залу")
@@ -34,7 +31,7 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
 
 hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromServices] IHallService hallService) =>
 {
-    var halls = hallService.GetAvailableHalls(minCapacity);
+    var halls = hallService.GetAvailable(minCapacity);
     return Results.Ok(halls);
 })
 .WithSummary("Пошук доступних залів")
@@ -44,7 +41,7 @@ hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHa
 {
     try
     {
-        var response = hallService.BookHall(request);
+        var response = hallService.Book(request);
         return Results.Ok(response);
     }
     catch (Exception ex)
@@ -54,6 +51,26 @@ hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHa
 })
 .WithSummary("Бронювання залу та розрахунок вартості")
 .WithDescription("Оформлює бронювання на вказаний час та автоматично підраховує загальну вартість оренди з урахуванням послуг.");
+
+hallsApi.MapPut("/{id:guid}", ([FromRoute] Guid id, [FromBody] HallDto updatedHall, [FromServices] IHallService hallService) =>
+{
+    var success = hallService.Update(id, updatedHall);
+    return success
+        ? Results.Ok(new { Message = "Зал успішно оновлено" })
+        : Results.NotFound(new { Error = "Зал не знайдено" });
+})
+.WithSummary("Редагування інформації про зал")
+.WithDescription("Оновлює дані існуючого залу (наприклад, зміна вартості оренди або додавання послуг).");
+
+hallsApi.MapDelete("/{id:guid}", ([FromRoute] Guid id, [FromServices] IHallService hallService) =>
+{
+    var success = hallService.Delete(id);
+    return success
+        ? Results.Ok(new { Message = "Зал успішно видалено" })
+        : Results.NotFound(new { Error = "Зал не знайдено" });
+})
+.WithSummary("Видалення конференц-залу")
+.WithDescription("Видаляє зал із системи за його унікальним ідентифікатором.");
 
 app.Run();
 

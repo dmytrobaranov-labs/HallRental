@@ -4,8 +4,9 @@ namespace HallRental.API.Services;
 
 public interface IHallService
 {
-    Guid AddHall(HallDto hall);
-    IEnumerable<HallDto> GetAvailableHalls(int minCapacity);
-
-    public BookingResponse BookHall(BookingRequest request);
+    Guid Add(HallDto hall);
+    IEnumerable<HallDto> GetAvailable(int minCapacity);
+    BookingResponse Book(BookingRequest request);
+    bool Update(Guid id, HallDto updatedHall);
+    bool Delete(Guid id);
 }
