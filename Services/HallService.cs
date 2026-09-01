@@ -3,12 +3,18 @@
 namespace HallRental.API.Services;
 
 /// <summary>
-/// Сервіс для управління конференц-залами та обробки бронювань.
-/// Реалізує бізнес-логіку, включно з динамічним ціноутворенням.
+/// Сервіс для управління конференц-залами та обробки бронювань 
+/// з урахуванням часових колізій та динамічних тарифів.
 /// </summary>
 public class HallService : IHallService
 {
+    // Внутрішнє сховище залів у пам'яті
     private readonly List<HallDto> _halls = new();
+
+    // Колекція для збереження успішних бронювань (використовується для контролю зайнятості)
+    private readonly List<(BookingRequest Request, BookingResponse Response)> _bookings = new();
+
+    // Допоміжний калькулятор для обчислення динамічної ціни залежно від часу доби
     private readonly PricingCalculator _pricingCalculator = new();
 
     /// <summary>
@@ -22,46 +28,81 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Повертає список залів, місткість яких задовольняє вказаний мінімум.
+    /// Пошук доступних залів за мінімальною місткістю та відсіканням вже зайнятих на вказаний період.
     /// </summary>
-    public IEnumerable<HallDto> GetAvailable(int minCapacity)
+    public IEnumerable<HallDto> GetAvailable(int minCapacity, DateTime? startTime = null, DateTime? endTime = null)
     {
-        return _halls.Where(h => h.Capacity >= minCapacity);
+        // Крок 1. Фільтруємо зали за місткістю
+        var candidateHalls = _halls.Where(h => h.Capacity >= minCapacity);
+
+        // Якщо часовий інтервал не вказано, повертаємо зали виключно за місткістю
+        if (!startTime.HasValue || !endTime.HasValue)
+        {
+            return candidateHalls;
+        }
+
+        // Крок 2. Знаходимо ідентифікатори залів, які мають перетин інтервалів бронювання
+        var bookedHallIds = _bookings
+            .Where(b => b.Request.StartTime < endTime.Value && b.Request.EndTime > startTime.Value)
+            .Select(b => b.Request.HallId)
+            .ToHashSet();
+
+        // Крок 3. Виключаємо зайняті зали зі списку доступних
+        return candidateHalls.Where(h => !bookedHallIds.Contains(h.Id));
     }
 
     /// <summary>
-    /// Оформлює бронювання залу з урахуванням часу доби та додаткових послуг.
+    /// Оформлює бронювання залу з перевіркою колізій та розрахунком вартості за динамічним тарифом.
     /// </summary>
     public BookingResponse Book(BookingRequest request)
     {
-        // Знаходимо зал за унікальним ідентифікатором
+        // Перевіряємо, чи існує зал
         var hall = _halls.FirstOrDefault(h => h.Id == request.HallId);
-        if (hall == null) throw new Exception("Зал не знайдено");
+        if (hall == null)
+            throw new Exception("Зал не знайдено");
 
-        // Перевіряємо коректність часового інтервалу бронювання
+        // Перевіряємо коректність введеного часу
         ValidateBookingTime(request.StartTime, request.EndTime);
 
-        // Розраховуємо вартість оренди залу з урахуванням динамічних тарифів (знижки/націнки)
+        // Перевіряємо на конфлікт (подвійне бронювання в той самий час)
+        bool isAlreadyBooked = _bookings.Any(b =>
+            b.Request.HallId == request.HallId &&
+            b.Request.StartTime < request.EndTime &&
+            b.Request.EndTime > request.StartTime
+        );
+
+        if (isAlreadyBooked)
+        {
+            throw new Exception("Цей зал вже заброньований на обраний проміжок часу");
+        }
+
+        // Розраховуємо вартість оренди залу (з урахуванням ранкових, вечірніх та пікових годин)
         decimal totalHallCost = CalculateTotalHallCost(hall.BasePricePerHour, request.StartTime, request.EndTime);
 
-        // Розраховуємо вартість обраних додаткових послуг
+        // Розраховуємо вартість додаткових послуг (обладнання тощо)
         decimal accessoriesCost = CalculateAccessoriesCost(hall.Accessories, request.SelectedAccessories);
 
-        return new BookingResponse
+        var response = new BookingResponse
         {
             BookingId = Guid.NewGuid(),
             TotalCost = Math.Round(totalHallCost + accessoriesCost, 2),
             Message = "Бронювання успішне з урахуванням динамічного тарифу"
         };
+
+        // Зберігаємо бронювання в історії для запобігання майбутнім колізіям
+        _bookings.Add((request, response));
+
+        return response;
     }
 
     /// <summary>
-    /// Оновлює інформацію про існуючий конференц-зал за його ідентифікатором.
+    /// Оновлює інформацію про існуючий зал.
     /// </summary>
     public bool Update(Guid id, HallDto updatedHall)
     {
         var hall = _halls.FirstOrDefault(h => h.Id == id);
-        if (hall == null) return false;
+        if (hall == null)
+            return false;
 
         hall.Name = updatedHall.Name;
         hall.Capacity = updatedHall.Capacity;
@@ -77,7 +118,8 @@ public class HallService : IHallService
     public bool Delete(Guid id)
     {
         var hall = _halls.FirstOrDefault(h => h.Id == id);
-        if (hall == null) return false;
+        if (hall == null)
+            return false;
 
         _halls.Remove(hall);
         return true;
@@ -93,7 +135,7 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Погодинно обчислює загальну вартість оренди залу, застосовуючи правила PricingCalculator.
+    /// Погодинно обчислює вартість оренди залу із залученням PricingCalculator.
     /// </summary>
     private decimal CalculateTotalHallCost(decimal basePrice, DateTime start, DateTime end)
     {
@@ -104,13 +146,13 @@ public class HallService : IHallService
         {
             var nextTime = currentTime.AddHours(1);
 
-            // Якщо остання година неповна, розраховуємо частку від години
+            // Якщо остання година неповна, беремо пропорційну частку
             double fraction = nextTime > end ? (end - currentTime).TotalHours : 1.0;
 
-            // Отримуємо тариф для конкретної години доби
+            // Отримуємо ставку за конкретну годину доби
             decimal hourlyRate = _pricingCalculator.CalculateHourlyRate(basePrice, currentTime.Hour);
-            totalCost += hourlyRate * (decimal)fraction;
 
+            totalCost += hourlyRate * (decimal)fraction;
             currentTime = nextTime;
         }
 
@@ -118,7 +160,7 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Підраховує сумарну вартість обраних користувачем додаткових послуг.
+    /// Підраховує сумарну вартість обраних додаткових послуг.
     /// </summary>
     private decimal CalculateAccessoriesCost(List<AccessoryDto> hallAccessories, List<string> selectedAccessories)
     {
