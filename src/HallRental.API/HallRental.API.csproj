@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.22.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+
+    <!-- Persistence: Azure SQL via EF Core -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.*" />
+
+    <!-- Observability: Application Insights via OpenTelemetry -->
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.*" />
+  </ItemGroup>
+
+</Project>
