@@ -2,9 +2,9 @@ name: build-test-deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
 
 permissions:
@@ -55,7 +55,7 @@ jobs:
   deploy:
     name: Deploy to Azure
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     environment: production   # суб'єкт OIDC: repo:<owner>/<repo>:environment:production
     steps:
