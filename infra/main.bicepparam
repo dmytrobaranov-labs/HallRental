@@ -1,8 +1,9 @@
 using './main.bicep'
 
 param appName = 'hallrental'
-param appServiceSku = 'B1'
+param location = 'swedencentral'
+param appServiceSku = 'F1'
 param useFreeSqlOffer = true
 
-// Передається з командного рядка / GitHub secret, НЕ зберігайте тут:
+// Passed from the command line / GitHub secret — do NOT store it here:
 param jwtSigningKey = readEnvironmentVariable('JWT_SIGNING_KEY', '')
