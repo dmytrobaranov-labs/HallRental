@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Don't generate unsigned .exe launchers (apphost); run via the signed dotnet.exe instead.
+         Avoids Smart App Control / WDAC blocks on locally built executables. -->
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+</Project>

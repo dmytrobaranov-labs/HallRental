@@ -1,8 +1,14 @@
 <Solution>
   <Folder Name="/Solution Items/">
     <File Path="README.md" />
+    <File Path="infra/main.bicep" />
+    <File Path=".github/workflows/deploy.yml" />
   </Folder>
-  <Project Path="../HallRental.IntegrationTests/HallRental.IntegrationTests.csproj" Id="2cfffc41-49bc-4f38-8a5e-5c428d628494" />
-  <Project Path="../HallRental.UnitTests/HallRental.UnitTests.csproj" Id="cda4520c-feaa-4974-8edc-a46b206074e1" />
-  <Project Path="HallRental.API.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/HallRental.API/HallRental.API.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HallRental.UnitTests/HallRental.UnitTests.csproj" />
+    <Project Path="tests/HallRental.IntegrationTests/HallRental.IntegrationTests.csproj" />
+  </Folder>
 </Solution>

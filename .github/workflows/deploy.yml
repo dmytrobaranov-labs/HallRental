@@ -1,0 +1,104 @@
+name: build-test-deploy
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # потрібно для входу в Azure через OIDC (без паролів)
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  RESOURCE_GROUP: rg-hallrental
+  API_PROJECT: src/HallRental.API/HallRental.API.csproj
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore HallRental.slnx
+
+      - name: Build
+        run: dotnet build HallRental.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test HallRental.slnx -c Release --no-build --logger "trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+
+      - name: Publish
+        run: dotnet publish ${{ env.API_PROJECT }} -c Release --no-build -o publish
+
+      - name: Upload app package
+        uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: publish
+
+  deploy:
+    name: Deploy to Azure
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: production   # суб'єкт OIDC: repo:<owner>/<repo>:environment:production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: app
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infrastructure (Bicep)
+        id: infra
+        env:
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+        run: |
+          outputs=$(az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "hallrental-${{ github.run_number }}" \
+            --parameters infra/main.bicepparam \
+            --query properties.outputs -o json)
+          echo "webAppName=$(echo "$outputs" | jq -r .webAppName.value)" >> "$GITHUB_OUTPUT"
+          echo "webAppUrl=$(echo "$outputs" | jq -r .webAppUrl.value)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy app
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.infra.outputs.webAppName }}
+          package: app
+
+      - name: Smoke test
+        run: |
+          url="${{ steps.infra.outputs.webAppUrl }}"
+          echo "Liveness: $url/health"
+          curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors "$url/health"
+          echo
+          echo "Readiness (включно з БД; serverless-база може прокидатися ~1 хв): $url/health/ready"
+          curl --fail --silent --show-error --retry 8 --retry-delay 20 --retry-all-errors --max-time 90 "$url/health/ready"
+          echo
+          echo "Deployed: $url/swagger" >> "$GITHUB_STEP_SUMMARY"

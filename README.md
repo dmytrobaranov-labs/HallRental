@@ -87,11 +87,31 @@ dotnet test
 ## 🛠 Технології
 
 * **Платформа:** .NET 10 (C#)
-* **Архітектура:** Minimal APIs, Service-based architecture
+* **Архітектура:** Minimal APIs, Service-based architecture, Repository (пам'ять / EF Core)
+* **Дані:** EF Core 10 + Azure SQL (serverless); без рядка підключення — сховище в пам'яті
 * **Тестування:** xUnit
+* **Хмара:** Azure App Service (Linux), Azure SQL, Key Vault, Application Insights, Managed Identity
+* **IaC / CI/CD:** Bicep, GitHub Actions (OIDC, без збережених паролів)
 
-### Рівні доступу (RBAC):
-=======
+---
+
+## ☁️ Розгортання в Azure
+
+```
+GitHub push ──► GitHub Actions: build ► test ► publish
+                     │  (OIDC login)
+                     ▼
+              Bicep ► Resource group
+                 ├─ App Service (Linux, .NET 10) ── Managed Identity ──┐
+                 ├─ Azure SQL (serverless, лише Entra-автентифікація) ◄─┤
+                 ├─ Key Vault (JWT signing key) ◄──────────────────────┘
+                 └─ Application Insights ◄── Log Analytics (KQL)
+```
+
+* Жодних паролів у коді чи конфігурації: застосунок входить у SQL і Key Vault через **Managed Identity**, GitHub Actions — через **OIDC federated credentials**.
+* `GET /health` — liveness, `GET /health/ready` — readiness (включно з БД), `/swagger` — документація API.
+* Покрокова інструкція: [docs/AZURE_DEPLOYMENT.md](docs/AZURE_DEPLOYMENT.md).
+
 ## 🔒 Безпека та авторизація
 * **Безпека передачі даних:** Увесь трафік примусово шифрується та перенаправляється через HTTPS (`app.UseHttpsRedirection()`).
 * **Автентифікація та Авторизація:** Використання JWT-токенів для ідентифікації користувачів.
@@ -117,7 +137,7 @@ dotnet test
 
 Для тестування захищених ендпоінтів додайте заголовок `Authorization: Bearer <TOKEN>`, використовуючи один із наведених нижче токенів (копіюйте рядок повністю разом із крапками).
 
-> ✅ Ці токени підписані реальним ключем `SuperSecretKey12345678901234567890`, що вказаний у `Program.cs`, тому проходять повну валідацію (підпис, issuer, audience, роль, термін дії) і готові до використання в Postman без додаткових налаштувань.
+> ✅ Ці токени підписані **лише локальним dev-ключем** з `appsettings.Development.json` і працюють тільки при локальному запуску (`ASPNETCORE_ENVIRONMENT=Development`) та в тестах. У хмарі ключ зберігається в Azure Key Vault, тож ці токени там недійсні — для демо використовуйте `POST /api/v1/auth/demo-token?role=Admin` (див. [docs/AZURE_DEPLOYMENT.md](docs/AZURE_DEPLOYMENT.md), крок 7).
 
 ### 🛡️ 1. Токен Адміністратора (повний доступ)
 `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbi1pZC0wMDEiLCJuYW1lIjoiQWRtaW4gVXNlciIsInJvbGUiOiJBZG1pbiIsIm5iZiI6MTc1Njg4MjU3OCwiZXhwIjoyMDcyNDgyNTc4LCJpc3MiOiJIYWxsUmVudGFsQVBJIiwiYXVkIjoiSGFsbFJlbnRhbENsaWVudCJ9.ag7TeByv5SDWw-9xG_gVdbkukl2zklF7hTZaWLHnytQ`
