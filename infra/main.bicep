@@ -16,8 +16,8 @@ targetScope = 'resourceGroup'
 @maxLength(12)
 param appName string = 'hallrental'
 
-@description('Регіон. За замовчуванням — регіон resource group.')
-param location string = resourceGroup().location
+param location = 'swedencentral'
+
 
 @description('SKU App Service plan. B1 — рекомендовано; F1 — безкоштовний fallback, якщо на B1 немає квоти.')
 @allowed([ 'B1', 'F1' ])
