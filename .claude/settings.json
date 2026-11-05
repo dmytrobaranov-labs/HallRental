@@ -1,15 +1,15 @@
-   {
-     "permissions": {
-       "allow": [
-         "Bash(dotnet build:*)", "Bash(dotnet test:*)", "Bash(dotnet restore:*)",
-         "Bash(dotnet format:*)", "Bash(dotnet ef migrations:*)",
-         "Bash(git status)", "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)",
-         "Bash(git checkout -b:*)", "Bash(git switch:*)", "Bash(git push -u origin:*)",
-         "Bash(gh pr create:*)", "Bash(gh pr view:*)"
-       ],
-       "deny": [
-         "Bash(git push --force:*)", "Bash(git push origin master:*)",
-         "Bash(az group delete:*)", "Bash(az * delete:*)"
-       ]
-     }
-   }
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)", "Bash(dotnet test:*)", "Bash(dotnet restore:*)",
+      "Bash(dotnet format:*)", "Bash(dotnet ef migrations:*)",
+      "Bash(git status)", "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)",
+      "Bash(git checkout -b:*)", "Bash(git switch:*)", "Bash(git push -u origin:*)",
+      "Bash(gh pr create:*)", "Bash(gh pr view:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)", "Bash(git push origin master:*)",
+      "Bash(az group delete:*)", "Bash(az * delete:*)"
+    ]
+  }
+}

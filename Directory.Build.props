@@ -3,5 +3,8 @@
     <!-- Don't generate unsigned .exe launchers (apphost); run via the signed dotnet.exe instead.
          Avoids Smart App Control / WDAC blocks on locally built executables. -->
     <UseAppHost>false</UseAppHost>
+
+    <!-- CI fails on any compiler or NuGet audit warning (e.g. a newly disclosed vulnerable package). -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 </Project>
