@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write   # потрібно для входу в Azure через OIDC (без паролів)
+  id-token: write   # required for passwordless Azure login via OIDC
   contents: read
 
 env:
@@ -55,9 +55,10 @@ jobs:
   deploy:
     name: Deploy to Azure
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    # Opt-in: set the repository variable DEPLOY_ENABLED=true once Azure is provisioned.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
-    environment: production   # суб'єкт OIDC: repo:<owner>/<repo>:environment:production
+    environment: production   # OIDC subject: repo:<owner>/<repo>:environment:production
     steps:
       - uses: actions/checkout@v4
 
@@ -98,7 +99,7 @@ jobs:
           echo "Liveness: $url/health"
           curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors "$url/health"
           echo
-          echo "Readiness (включно з БД; serverless-база може прокидатися ~1 хв): $url/health/ready"
+          echo "Readiness (includes the DB; the serverless database may take ~1 min to resume): $url/health/ready"
           curl --fail --silent --show-error --retry 8 --retry-delay 20 --retry-all-errors --max-time 90 "$url/health/ready"
           echo
           echo "Deployed: $url/swagger" >> "$GITHUB_STEP_SUMMARY"
