@@ -11,20 +11,20 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // ==========================================
-// 0. СПОСТЕРЕЖУВАНІСТЬ (Application Insights через OpenTelemetry)
+// 0. OBSERVABILITY (Application Insights via OpenTelemetry)
 // ==========================================
-// Вмикається лише тоді, коли задано рядок підключення (в Azure його підставляє Bicep).
-// Локально та в тестах телеметрія не надсилається.
+// Enabled only when a connection string is set (Bicep provides it in Azure),
+// so no telemetry is sent locally or from tests.
 if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
 {
     builder.Services.AddOpenTelemetry().UseAzureMonitor();
 }
 
 // ==========================================
-// 1. СХОВИЩЕ ДАНИХ
+// 1. DATA STORAGE
 // ==========================================
-// Немає рядка підключення -> сховище в пам'яті (локально, тести).
-// Є рядок підключення -> Azure SQL через EF Core.
+// No connection string -> in-memory repository (local runs, tests).
+// Connection string present -> Azure SQL via EF Core.
 var connectionString = builder.Configuration.GetConnectionString("HallRental");
 var useSql = !string.IsNullOrWhiteSpace(connectionString);
 
@@ -34,12 +34,12 @@ if (useSql)
 {
     builder.Services.AddDbContext<HallRentalDbContext>(options =>
         options.UseSqlServer(connectionString, sql =>
-            // Serverless-база може "прокидатися" до хвилини — повторюємо тимчасові помилки
+            // A serverless database can take up to a minute to resume, so transient errors are retried
             sql.EnableRetryOnFailure(maxRetryCount: 6, maxRetryDelay: TimeSpan.FromSeconds(15), errorNumbersToAdd: null)));
 
     builder.Services.AddScoped<IHallRepository, EfHallRepository>();
 
-    // Перевірка БД лише для /health/ready (тег "ready"), щоб пінги App Service не будили базу
+    // Database check only for /health/ready (tag "ready") so App Service pings do not wake the database
     healthChecks.AddDbContextCheck<HallRentalDbContext>(tags: ["ready"]);
 }
 else
@@ -50,7 +50,7 @@ else
 builder.Services.AddScoped<IHallService, HallService>();
 
 // ==========================================
-// 2. JWT (ключ із конфігурації / Key Vault, а не з коду)
+// 2. JWT (key from configuration / Key Vault, never from code)
 // ==========================================
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 if (string.IsNullOrWhiteSpace(jwt.SigningKey) || Encoding.UTF8.GetByteCount(jwt.SigningKey) < 32)
@@ -82,17 +82,17 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
 });
 
-// Swagger UI (зручно для демонстрації роботодавцю)
+// Swagger UI (handy for demoing the API)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
 // ==========================================
-// 3. МІГРАЦІЇ БД ПІД ЧАС СТАРТУ (лише коли явно увімкнено)
+// 3. DATABASE MIGRATIONS ON STARTUP (only when explicitly enabled)
 // ==========================================
-// Спрощення для демо-проєкту. У продакшні міграції краще запускати окремим кроком
-// CI/CD (EF migration bundle), а не під час старту кожного екземпляра.
+// A simplification for a demo project. In production, migrations should run as a separate
+// CI/CD step (EF migration bundle) rather than on startup of every instance.
 if (useSql && app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
     using var scope = app.Services.CreateScope();
@@ -101,15 +101,14 @@ if (useSql && app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 }
 
 // ==========================================
-// 4. БЕЗПЕКА ТА ГЛОБАЛЬНА ОБРОБКА ПОМИЛОК
+// 4. SECURITY AND GLOBAL ERROR HANDLING
 // ==========================================
 
-// Примусове перенаправлення всього трафіку через безпечний протокол HTTPS
-// (в App Service TLS завершується на фронтенді; ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
-//  дозволяє застосунку правильно бачити, що запит прийшов по HTTPS)
+// App Service terminates TLS at the front end; ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+// lets the app see that the original request came over HTTPS, so redirection works correctly.
 app.UseHttpsRedirection();
 
-// Глобальна обробка винятків (запобігає витоку технічного стек-трейсу)
+// Global exception handling (prevents stack traces from leaking to clients)
 app.UseExceptionHandler(exceptionHandlerApp =>
 {
     exceptionHandlerApp.Run(async context =>
@@ -138,17 +137,16 @@ if (app.Configuration.GetValue("Swagger:Enabled", true))
     app.UseSwaggerUI();
 }
 
-// Підключаємо конвеєр автентифікації та авторизації
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Liveness: застосунок живий (без звернення до БД) — використовує App Service Health check
+// Liveness: the app is up (no database call); used by the App Service health check
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     Predicate = _ => false
 }).AllowAnonymous();
 
-// Readiness: застосунок + БД доступні — для ручної перевірки та smoke-тесту
+// Readiness: the app and the database are reachable; for manual checks and the smoke test
 app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
@@ -157,14 +155,11 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 app.MapDemoTokenEndpoint(jwt);
 
 // ==========================================
-// 5. МАРШРУТИЗАЦІЯ (MINIMAL APIS)
+// 5. ROUTING (MINIMAL APIS)
 // ==========================================
 
 var hallsApi = app.MapGroup("/api/v1/halls");
 
-/// <summary>
-/// Публічний пошук доступних залів (не потребує токена).
-/// </summary>
 hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromQuery] DateTime? startTime, [FromQuery] DateTime? endTime, [FromServices] IHallService hallService) =>
 {
     var halls = hallService.GetAvailable(minCapacity, startTime, endTime);
@@ -173,9 +168,6 @@ hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromQuery] DateTime? startTi
 .WithSummary("Пошук доступних залів")
 .WithDescription("Доступно публічно без автентифікації.");
 
-/// <summary>
-/// Додавання нового залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
-/// </summary>
 hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
     var id = hallService.Add(hall);
@@ -185,13 +177,9 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
 .WithSummary("Додати новий зал")
 .WithDescription("Вимагає токена з роллю Admin.");
 
-/// <summary>
-/// Редагування залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
-/// Дозволяє змінити ціну оренди, місткість та список додаткових послуг.
-/// УВАГА: Accessories повністю ЗАМІНЮЄТЬСЯ, а не доповнюється — щоб додати нову
-/// послугу (наприклад, "Звук" за 700 грн), у тілі запиту потрібно передати
-/// повний список послуг залу (наявні + нова), інакше старі буде втрачено.
-/// </summary>
+// Accessories are REPLACED, not merged: to add a service via PUT the client must send
+// the hall's full accessory list (existing + new), otherwise the existing ones are lost.
+// Use POST /{id}/accessories to add a single service.
 hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
     var updated = hallService.Update(id, hall);
@@ -202,11 +190,8 @@ hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] 
 .WithSummary("Оновити дані залу")
 .WithDescription("Вимагає токена з роллю Admin. Accessories передається повним списком (заміна, не додавання).");
 
-/// <summary>
-/// Додавання послуги до залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
-/// На відміну від PUT /{id}, додає одну послугу, не зачіпаючи решту списку.
-/// Якщо послуга з такою назвою вже існує — оновлює її ціну.
-/// </summary>
+// Unlike PUT /{id}, adds one service without touching the rest of the list.
+// If a service with the same name already exists, its price is updated instead.
 hallsApi.MapPost("/{id:guid}/accessories", (Guid id, [FromBody] AccessoryDto accessory, [FromServices] IHallService hallService) =>
 {
     var added = hallService.AddAccessory(id, accessory);
@@ -217,9 +202,6 @@ hallsApi.MapPost("/{id:guid}/accessories", (Guid id, [FromBody] AccessoryDto acc
 .WithSummary("Додати послугу до залу")
 .WithDescription("Вимагає токена з роллю Admin. Додає одну послугу без заміни решти списку.");
 
-/// <summary>
-/// Видалення залу — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
-/// </summary>
 hallsApi.MapDelete("{id:guid}", (Guid id, [FromServices] IHallService hallService) =>
 {
     var deleted = hallService.Delete(id);
@@ -230,9 +212,6 @@ hallsApi.MapDelete("{id:guid}", (Guid id, [FromServices] IHallService hallServic
 .WithSummary("Видалити зал")
 .WithDescription("Вимагає токена з роллю Admin.");
 
-/// <summary>
-/// Оформлення бронювання — ДЛЯ ЗАРЕЄСТРОВАНИХ ЮЗЕРІВ (та адміністраторів).
-/// </summary>
 hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHallService hallService) =>
 {
     var response = hallService.Book(request);
@@ -242,9 +221,6 @@ hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHa
 .WithSummary("Забронювати зал")
 .WithDescription("Вимагає наявності валідного JWT-токена.");
 
-/// <summary>
-/// Бізнес-аналітика та звітність — ТІЛЬКИ ДЛЯ АДМІНІСТРАТОРІВ.
-/// </summary>
 var analyticsApi = app.MapGroup("/api/v1/analytics").RequireAuthorization("AdminOnly");
 
 analyticsApi.MapGet("/summary", ([FromServices] IHallService hallService) =>
