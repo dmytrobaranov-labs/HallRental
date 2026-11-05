@@ -1,5 +1,6 @@
 using HallRental.API.Auth;
 using HallRental.API.Data;
+using HallRental.API.ErrorHandling;
 using HallRental.API.Models;
 using HallRental.API.Services;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
@@ -48,6 +49,10 @@ else
 }
 
 builder.Services.AddScoped<IHallService, HallService>();
+
+// Every error response is RFC 7807 ProblemDetails; see ProblemDetailsExceptionHandler for the mapping.
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
 
 // ==========================================
 // 2. JWT (key from configuration / Key Vault, never from code)
@@ -108,28 +113,9 @@ if (useSql && app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 // lets the app see that the original request came over HTTPS, so redirection works correctly.
 app.UseHttpsRedirection();
 
-// Global exception handling (prevents stack traces from leaking to clients)
-app.UseExceptionHandler(exceptionHandlerApp =>
-{
-    exceptionHandlerApp.Run(async context =>
-    {
-        context.Response.ContentType = "application/json";
-
-        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
-        if (exceptionFeature != null)
-        {
-            context.Response.StatusCode = exceptionFeature.Error switch
-            {
-                KeyNotFoundException => StatusCodes.Status404NotFound,
-                ArgumentException => StatusCodes.Status400BadRequest,
-                _ => StatusCodes.Status500InternalServerError
-            };
-
-            var errorResponse = new { error = exceptionFeature.Error.Message };
-            await context.Response.WriteAsJsonAsync(errorResponse);
-        }
-    });
-});
+// Global exception handling: domain errors become 400/404/409, anything else a generic 500
+// (no stack traces or internal messages leak to clients)
+app.UseExceptionHandler();
 
 if (app.Configuration.GetValue("Swagger:Enabled", true))
 {

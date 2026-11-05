@@ -1,4 +1,5 @@
-﻿using HallRental.API.Models;
+﻿using HallRental.API.Domain.Errors;
+using HallRental.API.Models;
 using HallRental.API.Services;
 using Xunit;
 
@@ -35,7 +36,7 @@ public class HallServiceTests
     }
 
     [Fact]
-    public void Book_ShouldThrowException_WhenHallIsAlreadyBooked()
+    public void Book_OverlappingInterval_ThrowsBookingConflictException()
     {
         var hallId = _service.Add(new HallDto { Name = "Зал А", Capacity = 50, BasePricePerHour = 1000 });
 
@@ -46,19 +47,48 @@ public class HallServiceTests
             EndTime = new DateTime(2026, 9, 1, 14, 0, 0)
         };
 
-        // Перше бронювання успішне
+        // The first booking succeeds
         _service.Book(request1);
 
         var request2 = new BookingRequest
         {
             HallId = hallId,
-            StartTime = new DateTime(2026, 9, 1, 12, 0, 0), // Перетин з першим бронюванням
+            StartTime = new DateTime(2026, 9, 1, 12, 0, 0), // Overlaps the first booking
             EndTime = new DateTime(2026, 9, 1, 15, 0, 0)
         };
 
-        // Друге бронювання має викликати виняток через колізію часу
-        var exception = Assert.Throws<Exception>(() => _service.Book(request2));
-        Assert.Equal("Цей зал вже заброньований на обраний проміжок часу", exception.Message);
+        var exception = Assert.Throws<BookingConflictException>(() => _service.Book(request2));
+        Assert.Equal(hallId, exception.HallId);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Book_EndTimeNotAfterStartTime_ThrowsValidationException(int hours)
+    {
+        var hallId = _service.Add(new HallDto { Name = "Зал А", Capacity = 50, BasePricePerHour = 1000 });
+        var start = new DateTime(2026, 9, 1, 10, 0, 0);
+
+        Assert.Throws<ValidationException>(() => _service.Book(new BookingRequest
+        {
+            HallId = hallId,
+            StartTime = start,
+            EndTime = start.AddHours(hours)
+        }));
+    }
+
+    [Fact]
+    public void Book_NonExistentHall_ThrowsHallNotFoundException()
+    {
+        var missingHallId = Guid.NewGuid();
+
+        var exception = Assert.Throws<HallNotFoundException>(() => _service.Book(new BookingRequest
+        {
+            HallId = missingHallId,
+            StartTime = new DateTime(2026, 9, 1, 10, 0, 0),
+            EndTime = new DateTime(2026, 9, 1, 12, 0, 0)
+        }));
+        Assert.Equal(missingHallId, exception.HallId);
     }
 
     [Fact]
@@ -66,7 +96,7 @@ public class HallServiceTests
     {
         var hallId = _service.Add(new HallDto { Name = "Зал А", Capacity = 50, BasePricePerHour = 1000 });
 
-        // Бронюємо зал з 10:00 до 12:00
+        // Book the hall from 10:00 to 12:00
         _service.Book(new BookingRequest
         {
             HallId = hallId,
@@ -74,14 +104,14 @@ public class HallServiceTests
             EndTime = new DateTime(2026, 9, 1, 12, 0, 0)
         });
 
-        // Шукаємо вільні зали на інтервал, що перетинається (з 11:00 до 13:00)
+        // Search for free halls in an overlapping interval (11:00 to 13:00)
         var availableHalls = _service.GetAvailable(
             minCapacity: 30,
             startTime: new DateTime(2026, 9, 1, 11, 0, 0),
             endTime: new DateTime(2026, 9, 1, 13, 0, 0)
         ).ToList();
 
-        // Зал не повинен з'явитися у списку вільних
+        // The hall must not be listed as available
         Assert.Empty(availableHalls);
     }
 
@@ -94,7 +124,7 @@ public class HallServiceTests
         {
             HallId = hallId,
             StartTime = new DateTime(2026, 9, 1, 10, 0, 0),
-            EndTime = new DateTime(2026, 9, 1, 12, 0, 0) // 2 години * 1000 = 2000
+            EndTime = new DateTime(2026, 9, 1, 12, 0, 0) // 2 hours * 1000 = 2000
         });
 
         var summary = _service.GetAnalyticsSummary();
@@ -180,11 +210,11 @@ public class HallServiceTests
     }
 
     [Fact]
-    public void AddAccessory_ShouldThrow_WhenNameIsEmpty()
+    public void AddAccessory_EmptyName_ThrowsValidationException()
     {
         var hallId = _service.Add(new HallDto { Name = "Зал", Capacity = 10, BasePricePerHour = 500 });
 
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<ValidationException>(() =>
             _service.AddAccessory(hallId, new AccessoryDto { Name = "", Price = 700 }));
     }
 }

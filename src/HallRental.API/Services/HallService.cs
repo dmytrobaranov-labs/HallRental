@@ -1,23 +1,24 @@
 using HallRental.API.Data;
+using HallRental.API.Domain.Errors;
 using HallRental.API.Models;
 
 namespace HallRental.API.Services;
 
 /// <summary>
-/// Сервіс для управління конференц-залами та обробки бронювань
-/// з урахуванням часових колізій та динамічних тарифів.
-/// Дані зберігаються через <see cref="IHallRepository"/> (пам'ять або Azure SQL).
+/// Manages conference halls and handles bookings,
+/// taking time conflicts and dynamic pricing into account.
+/// Data is stored through <see cref="IHallRepository"/> (in memory or Azure SQL).
 /// </summary>
 public class HallService : IHallService
 {
     private readonly IHallRepository _repository;
 
-    // Допоміжний калькулятор для обчислення динамічної ціни залежно від часу доби
+    // Computes the dynamic hourly rate depending on the time of day
     private readonly PricingCalculator _pricingCalculator = new();
 
     /// <summary>
-    /// Конструктор без параметрів — зберігає сумісність із наявними модульними тестами
-    /// (<c>new HallService()</c>): використовує сховище в пам'яті.
+    /// Parameterless constructor kept for compatibility with the existing unit tests
+    /// (<c>new HallService()</c>): uses the in-memory repository.
     /// </summary>
     public HallService() : this(new InMemoryHallRepository()) { }
 
@@ -27,18 +28,18 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Додає новий конференц-зал до системи.
+    /// Adds a new conference hall.
     /// </summary>
     public Guid Add(HallDto hall)
     {
         if (string.IsNullOrWhiteSpace(hall.Name))
-            throw new ArgumentException("Назва залу не може бути порожньою");
+            throw new ValidationException("Hall name must not be empty.");
 
         if (hall.Capacity <= 0)
-            throw new ArgumentException("Місткість залу має бути більшою за нуль");
+            throw new ValidationException("Hall capacity must be greater than zero.");
 
         if (hall.BasePricePerHour < 0)
-            throw new ArgumentException("Базова ціна не може бути від'ємною");
+            throw new ValidationException("Base price must not be negative.");
 
         hall.Id = Guid.NewGuid();
         _repository.AddHall(hall);
@@ -47,7 +48,7 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Пошук доступних залів за мінімальною місткістю та відсіканням вже зайнятих на вказаний період.
+    /// Finds halls with at least the given capacity that are not booked for the given period.
     /// </summary>
     public IEnumerable<HallDto> GetAvailable(int minCapacity, DateTime? startTime = null, DateTime? endTime = null)
     {
@@ -71,16 +72,16 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Оформлює бронювання залу з перевіркою колізій та розрахунком вартості за динамічним тарифом.
+    /// Books a hall after checking for conflicts and calculates the cost using dynamic pricing.
     /// </summary>
     public BookingResponse Book(BookingRequest request)
     {
         if (request.HallId == Guid.Empty)
-            throw new ArgumentException("Не вказано ідентифікатор залу");
+            throw new ValidationException("Hall id must be specified.");
 
         var hall = _repository.Halls.FirstOrDefault(h => h.Id == request.HallId);
         if (hall == null)
-            throw new KeyNotFoundException("Зал не знайдено");
+            throw new HallNotFoundException(request.HallId);
 
         ValidateBookingTime(request.StartTime, request.EndTime);
 
@@ -91,7 +92,7 @@ public class HallService : IHallService
 
         if (isAlreadyBooked)
         {
-            throw new Exception("Цей зал вже заброньований на обраний проміжок часу");
+            throw new BookingConflictException(request.HallId);
         }
 
         decimal totalHallCost = CalculateTotalHallCost(hall.BasePricePerHour, request.StartTime, request.EndTime);
@@ -114,12 +115,12 @@ public class HallService : IHallService
         {
             BookingId = booking.Id,
             TotalCost = booking.TotalCost,
-            Message = "Бронювання успішне з урахуванням динамічного тарифу"
+            Message = "Booking confirmed; the cost includes dynamic pricing."
         };
     }
 
     /// <summary>
-    /// Оновлює інформацію про існуючий зал.
+    /// Updates an existing hall.
     /// </summary>
     public bool Update(Guid id, HallDto updatedHall)
     {
@@ -137,7 +138,7 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Додає одну додаткову послугу до наявного списку послуг залу (без видалення інших).
+    /// Adds a single accessory to the hall's existing list (without removing the others).
     /// </summary>
     public bool AddAccessory(Guid hallId, AccessoryDto accessory)
     {
@@ -146,10 +147,10 @@ public class HallService : IHallService
             return false;
 
         if (string.IsNullOrWhiteSpace(accessory.Name))
-            throw new ArgumentException("Назва послуги не може бути порожньою");
+            throw new ValidationException("Accessory name must not be empty.");
 
         if (accessory.Price < 0)
-            throw new ArgumentException("Вартість послуги не може бути від'ємною");
+            throw new ValidationException("Accessory price must not be negative.");
 
         var existing = hall.Accessories.FirstOrDefault(a => a.Name == accessory.Name);
         if (existing != null)
@@ -166,7 +167,7 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Видаляє конференц-зал із системи за його ідентифікатором.
+    /// Deletes a conference hall by its id.
     /// </summary>
     public bool Delete(Guid id)
     {
@@ -180,7 +181,7 @@ public class HallService : IHallService
     }
 
     /// <summary>
-    /// Генерує зведену аналітичну звітність.
+    /// Builds the summary analytics report.
     /// </summary>
     public AnalyticsSummaryDto GetAnalyticsSummary()
     {
@@ -204,14 +205,14 @@ public class HallService : IHallService
         {
             TotalBookings = totalBookings,
             TotalRevenue = totalRevenue,
-            MostPopularHall = popularHall?.Name ?? "Невідомо"
+            MostPopularHall = popularHall?.Name ?? "Unknown"
         };
     }
 
     private static void ValidateBookingTime(DateTime start, DateTime end)
     {
         if (end <= start)
-            throw new Exception("Некоректний час бронювання");
+            throw new ValidationException("Booking end time must be later than start time.");
     }
 
     private decimal CalculateTotalHallCost(decimal basePrice, DateTime start, DateTime end)
