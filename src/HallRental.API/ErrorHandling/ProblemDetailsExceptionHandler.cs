@@ -41,7 +41,7 @@ public sealed class ProblemDetailsExceptionHandler(
 
     private static (int StatusCode, string Title, string Detail) Map(Exception exception) => exception switch
     {
-        ValidationException => (StatusCodes.Status400BadRequest, ProblemTitles.Validation, exception.Message),
+        DomainValidationException => (StatusCodes.Status400BadRequest, ProblemTitles.Validation, exception.Message),
         HallNotFoundException => (StatusCodes.Status404NotFound, ProblemTitles.HallNotFound, exception.Message),
         BookingConflictException => (StatusCodes.Status409Conflict, ProblemTitles.BookingConflict, exception.Message),
         // Thrown by Minimal API binding (malformed JSON, missing body) when ThrowOnBadRequest is on, i.e. in Development.

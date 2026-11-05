@@ -33,13 +33,13 @@ public class HallService : IHallService
     public Guid Add(HallDto hall)
     {
         if (string.IsNullOrWhiteSpace(hall.Name))
-            throw new ValidationException("Hall name must not be empty.");
+            throw new DomainValidationException("Hall name must not be empty.");
 
         if (hall.Capacity <= 0)
-            throw new ValidationException("Hall capacity must be greater than zero.");
+            throw new DomainValidationException("Hall capacity must be greater than zero.");
 
         if (hall.BasePricePerHour < 0)
-            throw new ValidationException("Base price must not be negative.");
+            throw new DomainValidationException("Base price must not be negative.");
 
         hall.Id = Guid.NewGuid();
         _repository.AddHall(hall);
@@ -77,7 +77,7 @@ public class HallService : IHallService
     public BookingResponse Book(BookingRequest request)
     {
         if (request.HallId == Guid.Empty)
-            throw new ValidationException("Hall id must be specified.");
+            throw new DomainValidationException("Hall id must be specified.");
 
         var hall = _repository.Halls.FirstOrDefault(h => h.Id == request.HallId);
         if (hall == null)
@@ -147,10 +147,10 @@ public class HallService : IHallService
             return false;
 
         if (string.IsNullOrWhiteSpace(accessory.Name))
-            throw new ValidationException("Accessory name must not be empty.");
+            throw new DomainValidationException("Accessory name must not be empty.");
 
         if (accessory.Price < 0)
-            throw new ValidationException("Accessory price must not be negative.");
+            throw new DomainValidationException("Accessory price must not be negative.");
 
         var existing = hall.Accessories.FirstOrDefault(a => a.Name == accessory.Name);
         if (existing != null)
@@ -212,7 +212,7 @@ public class HallService : IHallService
     private static void ValidateBookingTime(DateTime start, DateTime end)
     {
         if (end <= start)
-            throw new ValidationException("Booking end time must be later than start time.");
+            throw new DomainValidationException("Booking end time must be later than start time.");
     }
 
     private decimal CalculateTotalHallCost(decimal basePrice, DateTime start, DateTime end)

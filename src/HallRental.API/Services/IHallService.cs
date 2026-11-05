@@ -13,7 +13,7 @@ public interface IHallService
     /// </summary>
     /// <param name="hall">Data of the new hall.</param>
     /// <returns>The generated unique id of the hall.</returns>
-    /// <exception cref="ValidationException">The name is empty, the capacity is not positive or the price is negative.</exception>
+    /// <exception cref="DomainValidationException">The name is empty, the capacity is not positive or the price is negative.</exception>
     Guid Add(HallDto hall);
 
     /// <summary>
@@ -31,7 +31,7 @@ public interface IHallService
     /// </summary>
     /// <param name="request">Booking request data (hall, time, accessories).</param>
     /// <returns>The booking result with its id and total cost.</returns>
-    /// <exception cref="ValidationException">The hall id is empty or the end time is not later than the start time.</exception>
+    /// <exception cref="DomainValidationException">The hall id is empty or the end time is not later than the start time.</exception>
     /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
     /// <exception cref="BookingConflictException">The hall is already booked for an overlapping interval.</exception>
     BookingResponse Book(BookingRequest request);
@@ -50,7 +50,7 @@ public interface IHallService
     /// <param name="hallId">Unique id of the hall.</param>
     /// <param name="accessory">The accessory to add (name and price).</param>
     /// <returns>True if the accessory was added; false if the hall was not found.</returns>
-    /// <exception cref="ValidationException">The accessory name is empty or its price is negative.</exception>
+    /// <exception cref="DomainValidationException">The accessory name is empty or its price is negative.</exception>
     bool AddAccessory(Guid hallId, AccessoryDto accessory);
 
     /// <summary>

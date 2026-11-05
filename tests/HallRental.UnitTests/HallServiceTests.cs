@@ -64,12 +64,12 @@ public class HallServiceTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void Book_EndTimeNotAfterStartTime_ThrowsValidationException(int hours)
+    public void Book_EndTimeNotAfterStartTime_ThrowsDomainValidationException(int hours)
     {
         var hallId = _service.Add(new HallDto { Name = "Зал А", Capacity = 50, BasePricePerHour = 1000 });
         var start = new DateTime(2026, 9, 1, 10, 0, 0);
 
-        Assert.Throws<ValidationException>(() => _service.Book(new BookingRequest
+        Assert.Throws<DomainValidationException>(() => _service.Book(new BookingRequest
         {
             HallId = hallId,
             StartTime = start,
@@ -210,11 +210,11 @@ public class HallServiceTests
     }
 
     [Fact]
-    public void AddAccessory_EmptyName_ThrowsValidationException()
+    public void AddAccessory_EmptyName_ThrowsDomainValidationException()
     {
         var hallId = _service.Add(new HallDto { Name = "Зал", Capacity = 10, BasePricePerHour = 500 });
 
-        Assert.Throws<ValidationException>(() =>
+        Assert.Throws<DomainValidationException>(() =>
             _service.AddAccessory(hallId, new AccessoryDto { Name = "", Price = 700 }));
     }
 }
