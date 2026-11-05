@@ -115,6 +115,10 @@ if (useSql && app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 // catches exceptions thrown by every middleware below.
 app.UseExceptionHandler();
 
+// Turns empty error responses (401/403/405, Minimal API binding failures in Production)
+// into ProblemDetails too, via the IProblemDetailsService registered by AddProblemDetails.
+app.UseStatusCodePages();
+
 // App Service terminates TLS at the front end; ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 // lets the app see that the original request came over HTTPS, so redirection works correctly.
 app.UseHttpsRedirection();
