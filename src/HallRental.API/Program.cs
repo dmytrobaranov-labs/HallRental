@@ -1,5 +1,6 @@
 using HallRental.API.Auth;
 using HallRental.API.Data;
+using HallRental.API.Domain.Errors;
 using HallRental.API.ErrorHandling;
 using HallRental.API.Models;
 using HallRental.API.Services;
@@ -146,6 +147,12 @@ app.MapDemoTokenEndpoint(jwt);
 
 var hallsApi = app.MapGroup("/api/v1/halls");
 
+// Same shape as the 404 produced by HallNotFoundException in the exception handler.
+static IResult HallNotFound(Guid id) => Results.Problem(
+    statusCode: StatusCodes.Status404NotFound,
+    title: ProblemTitles.HallNotFound,
+    detail: HallNotFoundException.CreateMessage(id));
+
 hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromQuery] DateTime? startTime, [FromQuery] DateTime? endTime, [FromServices] IHallService hallService) =>
 {
     var halls = hallService.GetAvailable(minCapacity, startTime, endTime);
@@ -161,7 +168,8 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
 })
 .RequireAuthorization("AdminOnly")
 .WithSummary("Додати новий зал")
-.WithDescription("Вимагає токена з роллю Admin.");
+.WithDescription("Вимагає токена з роллю Admin.")
+.ProducesProblem(StatusCodes.Status400BadRequest);
 
 // Accessories are REPLACED, not merged: to add a service via PUT the client must send
 // the hall's full accessory list (existing + new), otherwise the existing ones are lost.
@@ -169,34 +177,38 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
 hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
     var updated = hallService.Update(id, hall);
-    if (!updated) return Results.NotFound(new { error = "Зал не знайдено" });
+    if (!updated) return HallNotFound(id);
     return Results.Ok(new { message = "Дані залу успішно оновлено" });
 })
 .RequireAuthorization("AdminOnly")
 .WithSummary("Оновити дані залу")
-.WithDescription("Вимагає токена з роллю Admin. Accessories передається повним списком (заміна, не додавання).");
+.WithDescription("Вимагає токена з роллю Admin. Accessories передається повним списком (заміна, не додавання).")
+.ProducesProblem(StatusCodes.Status404NotFound);
 
 // Unlike PUT /{id}, adds one service without touching the rest of the list.
 // If a service with the same name already exists, its price is updated instead.
 hallsApi.MapPost("/{id:guid}/accessories", (Guid id, [FromBody] AccessoryDto accessory, [FromServices] IHallService hallService) =>
 {
     var added = hallService.AddAccessory(id, accessory);
-    if (!added) return Results.NotFound(new { error = "Зал не знайдено" });
+    if (!added) return HallNotFound(id);
     return Results.Ok(new { message = "Послугу успішно додано" });
 })
 .RequireAuthorization("AdminOnly")
 .WithSummary("Додати послугу до залу")
-.WithDescription("Вимагає токена з роллю Admin. Додає одну послугу без заміни решти списку.");
+.WithDescription("Вимагає токена з роллю Admin. Додає одну послугу без заміни решти списку.")
+.ProducesProblem(StatusCodes.Status400BadRequest)
+.ProducesProblem(StatusCodes.Status404NotFound);
 
 hallsApi.MapDelete("{id:guid}", (Guid id, [FromServices] IHallService hallService) =>
 {
     var deleted = hallService.Delete(id);
-    if (!deleted) return Results.NotFound(new { error = "Зал не знайдено" });
+    if (!deleted) return HallNotFound(id);
     return Results.NoContent();
 })
 .RequireAuthorization("AdminOnly")
 .WithSummary("Видалити зал")
-.WithDescription("Вимагає токена з роллю Admin.");
+.WithDescription("Вимагає токена з роллю Admin.")
+.ProducesProblem(StatusCodes.Status404NotFound);
 
 hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHallService hallService) =>
 {
@@ -205,7 +217,10 @@ hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHa
 })
 .RequireAuthorization()
 .WithSummary("Забронювати зал")
-.WithDescription("Вимагає наявності валідного JWT-токена.");
+.WithDescription("Вимагає наявності валідного JWT-токена.")
+.ProducesProblem(StatusCodes.Status400BadRequest)
+.ProducesProblem(StatusCodes.Status404NotFound)
+.ProducesProblem(StatusCodes.Status409Conflict);
 
 var analyticsApi = app.MapGroup("/api/v1/analytics").RequireAuthorization("AdminOnly");
 

@@ -85,6 +85,36 @@ public class ErrorHandlingTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task UpdateHall_NonExistentHall_Returns404ProblemDetails()
+    {
+        var client = CreateClient(TestTokens.AdminRole);
+
+        var response = await client.PutAsJsonAsync($"{HallsRoute}/{Guid.NewGuid()}", new HallDto { Name = "Hall", Capacity = 10, BasePricePerHour = 100 });
+
+        await AssertProblemDetailsAsync(response, HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task AddAccessory_NonExistentHall_Returns404ProblemDetails()
+    {
+        var client = CreateClient(TestTokens.AdminRole);
+
+        var response = await client.PostAsJsonAsync($"{HallsRoute}/{Guid.NewGuid()}/accessories", new AccessoryDto { Name = "Sound", Price = 100 });
+
+        await AssertProblemDetailsAsync(response, HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task DeleteHall_NonExistentHall_Returns404ProblemDetails()
+    {
+        var client = CreateClient(TestTokens.AdminRole);
+
+        var response = await client.DeleteAsync($"{HallsRoute}/{Guid.NewGuid()}");
+
+        await AssertProblemDetailsAsync(response, HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task AnyEndpoint_UnexpectedException_Returns500WithoutInternalDetails()
     {
         var client = _factory
