@@ -62,8 +62,8 @@ var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOption
 if (string.IsNullOrWhiteSpace(jwt.SigningKey) || Encoding.UTF8.GetByteCount(jwt.SigningKey) < 32)
 {
     throw new InvalidOperationException(
-        "Jwt:SigningKey не налаштовано або він коротший за 32 байти. " +
-        "Локально — appsettings.Development.json, в Azure — секрет у Key Vault.");
+        "Jwt:SigningKey is not configured or is shorter than 32 bytes. " +
+        "Locally use appsettings.Development.json; in Azure use a Key Vault secret.");
 }
 
 builder.Services.AddAuthentication("Bearer")
@@ -158,8 +158,8 @@ hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromQuery] DateTime? startTi
     var halls = hallService.GetAvailable(minCapacity, startTime, endTime);
     return Results.Ok(halls);
 })
-.WithSummary("Пошук доступних залів")
-.WithDescription("Доступно публічно без автентифікації.");
+.WithSummary("Search available halls")
+.WithDescription("Public, no authentication required.");
 
 hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
@@ -167,8 +167,8 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
     return Results.Created($"/api/v1/halls/{id}", new { Id = id });
 })
 .RequireAuthorization("AdminOnly")
-.WithSummary("Додати новий зал")
-.WithDescription("Вимагає токена з роллю Admin.")
+.WithSummary("Add a new hall")
+.WithDescription("Requires a token with the Admin role.")
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
 // Accessories are REPLACED, not merged: to add a service via PUT the client must send
@@ -178,11 +178,11 @@ hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] 
 {
     var updated = hallService.Update(id, hall);
     if (!updated) return HallNotFound(id);
-    return Results.Ok(new { message = "Дані залу успішно оновлено" });
+    return Results.Ok(new { message = "Hall updated successfully." });
 })
 .RequireAuthorization("AdminOnly")
-.WithSummary("Оновити дані залу")
-.WithDescription("Вимагає токена з роллю Admin. Accessories передається повним списком (заміна, не додавання).")
+.WithSummary("Update a hall")
+.WithDescription("Requires a token with the Admin role. Accessories must be sent as the full list (replaced, not merged).")
 .ProducesProblem(StatusCodes.Status404NotFound);
 
 // Unlike PUT /{id}, adds one service without touching the rest of the list.
@@ -191,11 +191,11 @@ hallsApi.MapPost("/{id:guid}/accessories", (Guid id, [FromBody] AccessoryDto acc
 {
     var added = hallService.AddAccessory(id, accessory);
     if (!added) return HallNotFound(id);
-    return Results.Ok(new { message = "Послугу успішно додано" });
+    return Results.Ok(new { message = "Accessory added successfully." });
 })
 .RequireAuthorization("AdminOnly")
-.WithSummary("Додати послугу до залу")
-.WithDescription("Вимагає токена з роллю Admin. Додає одну послугу без заміни решти списку.")
+.WithSummary("Add an accessory to a hall")
+.WithDescription("Requires a token with the Admin role. Adds a single accessory without replacing the rest of the list.")
 .ProducesProblem(StatusCodes.Status400BadRequest)
 .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -206,8 +206,8 @@ hallsApi.MapDelete("{id:guid}", (Guid id, [FromServices] IHallService hallServic
     return Results.NoContent();
 })
 .RequireAuthorization("AdminOnly")
-.WithSummary("Видалити зал")
-.WithDescription("Вимагає токена з роллю Admin.")
+.WithSummary("Delete a hall")
+.WithDescription("Requires a token with the Admin role.")
 .ProducesProblem(StatusCodes.Status404NotFound);
 
 hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHallService hallService) =>
@@ -216,8 +216,8 @@ hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHa
     return Results.Ok(response);
 })
 .RequireAuthorization()
-.WithSummary("Забронювати зал")
-.WithDescription("Вимагає наявності валідного JWT-токена.")
+.WithSummary("Book a hall")
+.WithDescription("Requires a valid JWT.")
 .ProducesProblem(StatusCodes.Status400BadRequest)
 .ProducesProblem(StatusCodes.Status404NotFound)
 .ProducesProblem(StatusCodes.Status409Conflict);
@@ -229,8 +229,8 @@ analyticsApi.MapGet("/summary", ([FromServices] IHallService hallService) =>
     var summary = hallService.GetAnalyticsSummary();
     return Results.Ok(summary);
 })
-.WithSummary("Отримання зведеної аналітики")
-.WithDescription("Вимагає токена з роллю Admin.");
+.WithSummary("Get summary analytics")
+.WithDescription("Requires a token with the Admin role.");
 
 app.Run();
 
