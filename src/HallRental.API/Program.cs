@@ -110,13 +110,14 @@ if (useSql && app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 // 4. SECURITY AND GLOBAL ERROR HANDLING
 // ==========================================
 
+// Global exception handling: domain errors become 400/404/409, anything else a generic 500
+// (no stack traces or internal messages leak to clients). Registered first so it also
+// catches exceptions thrown by every middleware below.
+app.UseExceptionHandler();
+
 // App Service terminates TLS at the front end; ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 // lets the app see that the original request came over HTTPS, so redirection works correctly.
 app.UseHttpsRedirection();
-
-// Global exception handling: domain errors become 400/404/409, anything else a generic 500
-// (no stack traces or internal messages leak to clients)
-app.UseExceptionHandler();
 
 if (app.Configuration.GetValue("Swagger:Enabled", true))
 {
