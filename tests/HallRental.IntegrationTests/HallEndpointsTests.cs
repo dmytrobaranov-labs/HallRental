@@ -11,8 +11,8 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient _client;
 
-    // Тестові токени, підписані тим самим секретом, що й у Program.cs
-    // ("SuperSecretKey12345678901234567890"), з коректними claim'ами role/iss/aud.
+    // Test tokens signed with the development key from appsettings.Development.json
+    // ("SuperSecretKey12345678901234567890"), with valid role/iss/aud claims.
     private const string AdminToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbi1pZC0wMDEiLCJuYW1lIjoiQWRtaW4gVXNlciIsInJvbGUiOiJBZG1pbiIsIm5iZiI6MTc1Njg4MjU3OCwiZXhwIjoyMDcyNDgyNTc4LCJpc3MiOiJIYWxsUmVudGFsQVBJIiwiYXVkIjoiSGFsbFJlbnRhbENsaWVudCJ9.ag7TeByv5SDWw-9xG_gVdbkukl2zklF7hTZaWLHnytQ";
 
@@ -37,7 +37,7 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         var response = await _client.PostAsJsonAsync("/api/v1/halls", newHall);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        // POST /halls повертає { "id": "<guid>" }, а НЕ { "data": { "hall_id": ... } }
+        // POST /halls returns { "id": "<guid>" }, NOT { "data": { "hall_id": ... } }
         var result = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         return result.GetProperty("id").GetGuid();
     }
@@ -45,7 +45,7 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task Post_Add_ReturnsCreatedAndId()
     {
-        UseToken(AdminToken); // POST /halls вимагає AdminOnly
+        UseToken(AdminToken); // POST /halls requires AdminOnly
 
         var newHall = new HallDto { Name = "Зал A", Capacity = 50, BasePricePerHour = 2000 };
         var response = await _client.PostAsJsonAsync("/api/v1/halls", newHall);
@@ -67,7 +67,7 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task Post_Add_WithUserToken_ReturnsForbidden()
     {
-        UseToken(UserToken); // валідний токен, але без ролі Admin
+        UseToken(UserToken); // valid token, but without the Admin role
 
         var newHall = new HallDto { Name = "Зал не для юзера", Capacity = 10, BasePricePerHour = 500 };
         var response = await _client.PostAsJsonAsync("/api/v1/halls", newHall);
@@ -78,7 +78,7 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task Get_Halls_ReturnsOkStatus()
     {
-        // Публічний ендпоінт, токен не потрібен
+        // Public endpoint, no token required
         UseToken(null);
 
         var response = await _client.GetAsync("/api/v1/halls?minCapacity=30");
@@ -88,18 +88,18 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task Post_Book_WithNonExistentHall_ReturnsNotFound()
     {
-        UseToken(UserToken); // /book вимагає лише автентифікації (будь-яка роль)
+        UseToken(UserToken); // /book only requires authentication (any role)
 
         var request = new BookingRequest
         {
-            HallId = Guid.NewGuid(), // такого залу не існує
+            HallId = Guid.NewGuid(), // no such hall exists
             StartTime = DateTime.UtcNow,
             EndTime = DateTime.UtcNow.AddHours(2)
         };
 
         var response = await _client.PostAsJsonAsync("/api/v1/halls/book", request);
 
-        // HallService.Book кидає KeyNotFoundException -> middleware мапить її в 404, а не 400
+        // HallService.Book throws HallNotFoundException -> the exception handler maps it to 404, not 400
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -125,7 +125,7 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var hallId = await CreateHallAsync();
 
-        UseToken(AdminToken); // PUT /halls/{id} вимагає AdminOnly
+        UseToken(AdminToken); // PUT /halls/{id} requires AdminOnly
         var updatedHall = new HallDto { Name = "Updated Hall", Capacity = 100, BasePricePerHour = 3000 };
         var putResponse = await _client.PutAsJsonAsync($"/api/v1/halls/{hallId}", updatedHall);
 
@@ -148,7 +148,7 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var hallId = await CreateHallAsync();
 
-        UseToken(AdminToken); // POST /halls/{id}/accessories вимагає AdminOnly
+        UseToken(AdminToken); // POST /halls/{id}/accessories requires AdminOnly
         var accessory = new AccessoryDto { Name = "Звук", Price = 700 };
         var response = await _client.PostAsJsonAsync($"/api/v1/halls/{hallId}/accessories", accessory);
 
@@ -171,10 +171,10 @@ public class HallEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var hallId = await CreateHallAsync("Test Hall Delete");
 
-        UseToken(AdminToken); // DELETE /halls/{id} вимагає AdminOnly
+        UseToken(AdminToken); // DELETE /halls/{id} requires AdminOnly
         var deleteResponse = await _client.DeleteAsync($"/api/v1/halls/{hallId}");
 
-        // Ендпоінт повертає Results.NoContent() (204), а не 200 OK
+        // The endpoint returns Results.NoContent() (204), not 200 OK
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
     }
 
