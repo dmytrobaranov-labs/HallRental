@@ -84,6 +84,38 @@ public class ErrorHandlingTests : IClassFixture<WebApplicationFactory<Program>>
         await AssertProblemDetailsAsync(response, HttpStatusCode.BadRequest);
     }
 
+    [Theory]
+    [InlineData("", 10, 100)]
+    [InlineData("Hall", 0, 100)]
+    [InlineData("Hall", 10, -1)]
+    public async Task UpdateHall_InvalidFields_Returns400ProblemDetails(string name, int capacity, int basePrice)
+    {
+        var client = CreateClient(TestTokens.AdminRole);
+        var hallId = await CreateHallAsync(client);
+
+        var response = await client.PutAsJsonAsync($"{HallsRoute}/{hallId}", new HallDto { Name = name, Capacity = capacity, BasePricePerHour = basePrice });
+
+        await AssertProblemDetailsAsync(response, HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateHall_DuplicateAccessoryNamesIgnoringCase_Returns400ProblemDetails()
+    {
+        var client = CreateClient(TestTokens.AdminRole);
+        var hallId = await CreateHallAsync(client);
+        var hall = new HallDto
+        {
+            Name = "Hall",
+            Capacity = 10,
+            BasePricePerHour = 100,
+            Accessories = [new AccessoryDto { Name = "Wi-Fi", Price = 10 }, new AccessoryDto { Name = "wi-fi", Price = 20 }]
+        };
+
+        var response = await client.PutAsJsonAsync($"{HallsRoute}/{hallId}", hall);
+
+        await AssertProblemDetailsAsync(response, HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task UpdateHall_NonExistentHall_Returns404ProblemDetails()
     {

@@ -217,4 +217,114 @@ public class HallServiceTests
         Assert.Throws<DomainValidationException>(() =>
             _service.AddAccessory(hallId, new AccessoryDto { Name = "", Price = 700 }));
     }
+
+    [Theory]
+    [InlineData("", 10, 100)]
+    [InlineData("   ", 10, 100)]
+    [InlineData("Hall", 0, 100)]
+    [InlineData("Hall", -5, 100)]
+    [InlineData("Hall", 10, -0.01)]
+    public void Add_InvalidHallFields_ThrowsDomainValidationException(string name, int capacity, double basePrice)
+    {
+        var hall = new HallDto { Name = name, Capacity = capacity, BasePricePerHour = (decimal)basePrice };
+
+        Assert.Throws<DomainValidationException>(() => _service.Add(hall));
+    }
+
+    [Theory]
+    [InlineData("", 10, 100)]
+    [InlineData("   ", 10, 100)]
+    [InlineData("Hall", 0, 100)]
+    [InlineData("Hall", -5, 100)]
+    [InlineData("Hall", 10, -0.01)]
+    public void Update_InvalidHallFields_ThrowsDomainValidationException(string name, int capacity, double basePrice)
+    {
+        var hallId = AddValidHall();
+        var hall = new HallDto { Name = name, Capacity = capacity, BasePricePerHour = (decimal)basePrice };
+
+        Assert.Throws<DomainValidationException>(() => _service.Update(hallId, hall));
+    }
+
+    [Theory]
+    [InlineData("", 10)]
+    [InlineData("   ", 10)]
+    [InlineData("Sound", -1)]
+    public void Add_InvalidAccessory_ThrowsDomainValidationException(string accessoryName, double accessoryPrice)
+    {
+        var hall = ValidHallWith(new AccessoryDto { Name = accessoryName, Price = (decimal)accessoryPrice });
+
+        Assert.Throws<DomainValidationException>(() => _service.Add(hall));
+    }
+
+    [Theory]
+    [InlineData("", 10)]
+    [InlineData("   ", 10)]
+    [InlineData("Sound", -1)]
+    public void Update_InvalidAccessory_ThrowsDomainValidationException(string accessoryName, double accessoryPrice)
+    {
+        var hallId = AddValidHall();
+        var hall = ValidHallWith(new AccessoryDto { Name = accessoryName, Price = (decimal)accessoryPrice });
+
+        Assert.Throws<DomainValidationException>(() => _service.Update(hallId, hall));
+    }
+
+    [Fact]
+    public void Add_DuplicateAccessoryNamesIgnoringCase_ThrowsDomainValidationException()
+    {
+        var hall = ValidHallWith(new AccessoryDto { Name = "Wi-Fi", Price = 10 }, new AccessoryDto { Name = "wi-fi", Price = 20 });
+
+        Assert.Throws<DomainValidationException>(() => _service.Add(hall));
+    }
+
+    [Fact]
+    public void Add_ValidAccessories_ReturnsId()
+    {
+        var hall = ValidHallWith(new AccessoryDto { Name = "Wi-Fi", Price = 0 }, new AccessoryDto { Name = "Sound", Price = 700 });
+
+        Assert.NotEqual(Guid.Empty, _service.Add(hall));
+    }
+
+    [Fact]
+    public void Update_InvalidHall_KeepsExistingData()
+    {
+        var hallId = AddValidHall();
+
+        Assert.Throws<DomainValidationException>(() =>
+            _service.Update(hallId, new HallDto { Name = "", Capacity = 0, BasePricePerHour = -1 }));
+
+        var hall = _service.GetAvailable(0).First(h => h.Id == hallId);
+        Assert.Equal("Valid Hall", hall.Name);
+        Assert.Equal(10, hall.Capacity);
+        Assert.Equal(100, hall.BasePricePerHour);
+    }
+
+    [Fact]
+    public void Update_DuplicateAccessoryNamesIgnoringCase_ThrowsWithDuplicateNameInMessage()
+    {
+        var hallId = AddValidHall();
+        var hall = ValidHallWith(new AccessoryDto { Name = "Wi-Fi", Price = 10 }, new AccessoryDto { Name = "WI-FI", Price = 20 });
+
+        var exception = Assert.Throws<DomainValidationException>(() => _service.Update(hallId, hall));
+
+        Assert.Contains("Wi-Fi", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AddAccessory_NegativePrice_ThrowsDomainValidationException()
+    {
+        var hallId = _service.Add(new HallDto { Name = "Hall", Capacity = 10, BasePricePerHour = 500 });
+
+        Assert.Throws<DomainValidationException>(() =>
+            _service.AddAccessory(hallId, new AccessoryDto { Name = "Sound", Price = -1 }));
+    }
+
+    private Guid AddValidHall() => _service.Add(ValidHallWith());
+
+    private static HallDto ValidHallWith(params AccessoryDto[] accessories) => new()
+    {
+        Name = "Valid Hall",
+        Capacity = 10,
+        BasePricePerHour = 100,
+        Accessories = [.. accessories]
+    };
 }

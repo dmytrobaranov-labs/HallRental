@@ -1,4 +1,5 @@
 using HallRental.API.Data;
+using HallRental.API.Domain;
 using HallRental.API.Domain.Errors;
 using HallRental.API.Models;
 
@@ -32,14 +33,7 @@ public class HallService : IHallService
     /// </summary>
     public Guid Add(HallDto hall)
     {
-        if (string.IsNullOrWhiteSpace(hall.Name))
-            throw new DomainValidationException("Hall name must not be empty.");
-
-        if (hall.Capacity <= 0)
-            throw new DomainValidationException("Hall capacity must be greater than zero.");
-
-        if (hall.BasePricePerHour < 0)
-            throw new DomainValidationException("Base price must not be negative.");
+        HallValidator.Validate(hall);
 
         hall.Id = Guid.NewGuid();
         _repository.AddHall(hall);
@@ -124,6 +118,8 @@ public class HallService : IHallService
     /// </summary>
     public bool Update(Guid id, HallDto updatedHall)
     {
+        HallValidator.Validate(updatedHall);
+
         var hall = _repository.Halls.FirstOrDefault(h => h.Id == id);
         if (hall == null)
             return false;
@@ -146,11 +142,7 @@ public class HallService : IHallService
         if (hall == null)
             return false;
 
-        if (string.IsNullOrWhiteSpace(accessory.Name))
-            throw new DomainValidationException("Accessory name must not be empty.");
-
-        if (accessory.Price < 0)
-            throw new DomainValidationException("Accessory price must not be negative.");
+        HallValidator.ValidateAccessory(accessory);
 
         var existing = hall.Accessories.FirstOrDefault(a => a.Name == accessory.Name);
         if (existing != null)

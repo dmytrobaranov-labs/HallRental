@@ -13,7 +13,10 @@ public interface IHallService
     /// </summary>
     /// <param name="hall">Data of the new hall.</param>
     /// <returns>The generated unique id of the hall.</returns>
-    /// <exception cref="DomainValidationException">The name is empty, the capacity is not positive or the price is negative.</exception>
+    /// <exception cref="DomainValidationException">
+    /// The name is empty, the capacity is not positive, the price is negative,
+    /// or an accessory has an empty name, a negative price or a name repeated ignoring case.
+    /// </exception>
     Guid Add(HallDto hall);
 
     /// <summary>
@@ -42,6 +45,7 @@ public interface IHallService
     /// <param name="id">Unique id of the hall.</param>
     /// <param name="updatedHall">Updated hall data.</param>
     /// <returns>True if the hall was updated; false if the hall was not found.</returns>
+    /// <exception cref="DomainValidationException">The updated data breaks the same rules as <see cref="Add"/>.</exception>
     bool Update(Guid id, HallDto updatedHall);
 
     /// <summary>

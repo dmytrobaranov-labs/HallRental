@@ -188,6 +188,7 @@ hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] 
 .RequireAuthorization("AdminOnly")
 .WithSummary("Update a hall")
 .WithDescription("Requires a token with the Admin role. Accessories must be sent as the full list (replaced, not merged).")
+.ProducesProblem(StatusCodes.Status400BadRequest)
 .ProducesProblem(StatusCodes.Status404NotFound);
 
 // Unlike PUT /{id}, adds one service without touching the rest of the list.
