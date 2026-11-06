@@ -318,6 +318,51 @@ public class HallServiceTests
             _service.AddAccessory(hallId, new AccessoryDto { Name = "Sound", Price = -1 }));
     }
 
+    [Fact]
+    public void AddAccessory_SameNameInDifferentCase_UpdatesPriceInsteadOfAddingDuplicate()
+    {
+        var hallId = _service.Add(ValidHallWith(new AccessoryDto { Name = "Wi-Fi", Price = 100 }));
+
+        _service.AddAccessory(hallId, new AccessoryDto { Name = "wi-fi", Price = 150 });
+
+        var hall = _service.GetAvailable(0).First(h => h.Id == hallId);
+        var accessory = Assert.Single(hall.Accessories);
+        Assert.Equal("Wi-Fi", accessory.Name);
+        Assert.Equal(150, accessory.Price);
+    }
+
+    [Fact]
+    public void Book_AccessoryNameInDifferentCase_ChargesAccessory()
+    {
+        var hallId = _service.Add(ValidHallWith(new AccessoryDto { Name = "Wi-Fi", Price = 300 }));
+
+        var response = _service.Book(new BookingRequest
+        {
+            HallId = hallId,
+            StartTime = new DateTime(2026, 9, 1, 10, 0, 0), // standard hours: 2 x 100
+            EndTime = new DateTime(2026, 9, 1, 12, 0, 0),
+            SelectedAccessories = ["WI-FI"]
+        });
+
+        Assert.Equal(500, response.TotalCost);
+    }
+
+    [Fact]
+    public void Book_SameAccessorySelectedTwiceInDifferentCase_ChargesItOnce()
+    {
+        var hallId = _service.Add(ValidHallWith(new AccessoryDto { Name = "Wi-Fi", Price = 300 }));
+
+        var response = _service.Book(new BookingRequest
+        {
+            HallId = hallId,
+            StartTime = new DateTime(2026, 9, 1, 10, 0, 0),
+            EndTime = new DateTime(2026, 9, 1, 12, 0, 0),
+            SelectedAccessories = ["Wi-Fi", "wi-fi"]
+        });
+
+        Assert.Equal(500, response.TotalCost);
+    }
+
     private Guid AddValidHall() => _service.Add(ValidHallWith());
 
     private static HallDto ValidHallWith(params AccessoryDto[] accessories) => new()

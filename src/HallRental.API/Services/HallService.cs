@@ -144,7 +144,7 @@ public class HallService : IHallService
 
         HallValidator.ValidateAccessory(accessory);
 
-        var existing = hall.Accessories.FirstOrDefault(a => a.Name == accessory.Name);
+        var existing = hall.Accessories.FirstOrDefault(a => HallValidator.AccessoryNameComparer.Equals(a.Name, accessory.Name));
         if (existing != null)
         {
             existing.Price = accessory.Price;
@@ -226,8 +226,10 @@ public class HallService : IHallService
 
     private static decimal CalculateAccessoriesCost(List<AccessoryDto> hallAccessories, List<string> selectedAccessories)
     {
+        var selectedNames = selectedAccessories.ToHashSet(HallValidator.AccessoryNameComparer);
+
         return hallAccessories
-            .Where(a => selectedAccessories.Contains(a.Name))
+            .Where(a => selectedNames.Contains(a.Name))
             .Sum(a => a.Price);
     }
 }
