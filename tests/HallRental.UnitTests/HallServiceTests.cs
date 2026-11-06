@@ -1,4 +1,5 @@
-﻿using HallRental.API.Domain.Errors;
+﻿using HallRental.API.Data;
+using HallRental.API.Domain.Errors;
 using HallRental.API.Models;
 using HallRental.API.Services;
 using Xunit;
@@ -517,6 +518,28 @@ public class HallServiceTests
     {
         Assert.Throws<DomainValidationException>(() =>
             _service.AddAccessory(Guid.NewGuid(), new AccessoryDto { Name = "", Price = 700 }));
+    }
+
+    [Fact]
+    public void Book_SelectedNamesInVariousSpellings_StoresCanonicalDistinctNames()
+    {
+        var repository = new InMemoryHallRepository();
+        var service = new HallService(repository);
+        var hallId = service.Add(ValidHallWith(
+            new AccessoryDto { Name = "Wi-Fi", Price = 300 },
+            new AccessoryDto { Name = "Sound", Price = 700 }));
+
+        var response = service.Book(new BookingRequest
+        {
+            HallId = hallId,
+            StartTime = new DateTime(2026, 9, 1, 10, 0, 0), // standard hours: 2 x 100
+            EndTime = new DateTime(2026, 9, 1, 12, 0, 0),
+            SelectedAccessories = [" wi-fi ", "sound", "WI-FI"]
+        });
+
+        var booking = Assert.Single(repository.Bookings);
+        Assert.Equal(["Wi-Fi", "Sound"], booking.SelectedAccessories);
+        Assert.Equal(1200, response.TotalCost); // each accessory charged once
     }
 
     private HallDto GetHall(Guid hallId) => _service.GetAvailable(0).First(h => h.Id == hallId);
