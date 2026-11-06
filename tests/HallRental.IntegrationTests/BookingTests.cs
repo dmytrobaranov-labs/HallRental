@@ -42,6 +42,28 @@ public class BookingTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(2300m, booking.TotalCost); // 2 h x 1000 + 300
     }
 
+    [Fact]
+    public async Task Book_NullSelectedAccessories_Returns200AndChargesHallOnly()
+    {
+        var hallId = await CreateHallAsync(CreateClient(TestTokens.AdminRole), basePricePerHour: 1000,
+            new AccessoryDto { Name = "Wi-Fi", Price = 300 });
+        var client = CreateClient(TestTokens.UserRole);
+
+        // Explicit JSON null: System.Text.Json overwrites the property initializer with null.
+        var response = await client.PostAsJsonAsync(BookRoute, new
+        {
+            hallId,
+            startTime = BookingStart.AddDays(1),
+            endTime = BookingStart.AddDays(1).AddHours(2),
+            selectedAccessories = (string[]?)null
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var booking = await response.Content.ReadFromJsonAsync<BookingResponse>();
+        Assert.NotNull(booking);
+        Assert.Equal(2000m, booking.TotalCost); // 2 h x 1000, no accessories
+    }
+
     private HttpClient CreateClient(string role)
     {
         var client = _factory.CreateClient();

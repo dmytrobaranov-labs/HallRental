@@ -420,6 +420,22 @@ public class HallServiceTests
         Assert.Equal(0, _service.GetAnalyticsSummary().TotalBookings);
     }
 
+    [Fact]
+    public void Book_NullSelectedAccessories_ChargesHallOnly()
+    {
+        var hallId = _service.Add(ValidHallWith(new AccessoryDto { Name = "Wi-Fi", Price = 300 }));
+
+        var response = _service.Book(new BookingRequest
+        {
+            HallId = hallId,
+            StartTime = new DateTime(2026, 9, 1, 10, 0, 0),
+            EndTime = new DateTime(2026, 9, 1, 12, 0, 0),
+            SelectedAccessories = null! // what System.Text.Json produces for "selectedAccessories": null
+        });
+
+        Assert.Equal(200, response.TotalCost);
+    }
+
     private Guid AddValidHall() => _service.Add(ValidHallWith());
 
     private static HallDto ValidHallWith(params AccessoryDto[] accessories) => new()

@@ -76,7 +76,10 @@ public class HallService : IHallService
         var hall = GetHall(request.HallId);
 
         ValidateBookingTime(request.StartTime, request.EndTime);
-        EnsureAccessoriesExist(hall, request.SelectedAccessories);
+
+        // JSON "selectedAccessories": null bypasses the property initializer; treat it as "none".
+        List<string> selectedAccessories = request.SelectedAccessories ?? [];
+        EnsureAccessoriesExist(hall, selectedAccessories);
 
         bool isAlreadyBooked = _repository.Bookings.Any(b =>
             b.HallId == request.HallId &&
@@ -89,7 +92,7 @@ public class HallService : IHallService
         }
 
         decimal totalHallCost = CalculateTotalHallCost(hall.BasePricePerHour, request.StartTime, request.EndTime);
-        decimal accessoriesCost = CalculateAccessoriesCost(hall.Accessories, request.SelectedAccessories);
+        decimal accessoriesCost = CalculateAccessoriesCost(hall.Accessories, selectedAccessories);
 
         var booking = new Booking
         {
@@ -97,7 +100,7 @@ public class HallService : IHallService
             HallId = request.HallId,
             StartTime = request.StartTime,
             EndTime = request.EndTime,
-            SelectedAccessories = request.SelectedAccessories.ToList(),
+            SelectedAccessories = selectedAccessories.ToList(),
             TotalCost = Math.Round(totalHallCost + accessoriesCost, 2)
         };
 
