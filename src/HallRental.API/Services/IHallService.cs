@@ -1,61 +1,67 @@
-﻿using HallRental.API.Models;
+using HallRental.API.Domain.Errors;
+using HallRental.API.Models;
 
 namespace HallRental.API.Services;
 
 /// <summary>
-/// Інтерфейс сервісу для управління конференц-залами, перевірки їхньої зайнятості та бронювання.
+/// Manages conference halls, their availability and bookings.
 /// </summary>
 public interface IHallService
 {
     /// <summary>
-    /// Додає новий конференц-зал до системи.
+    /// Adds a new conference hall.
     /// </summary>
-    /// <param name="hall">Об'єкт із даними нового залу.</param>
-    /// <returns>Повертає згенерований унікальний ідентифікатор (Guid) залу.</returns>
+    /// <param name="hall">Data of the new hall.</param>
+    /// <returns>The generated unique id of the hall.</returns>
+    /// <exception cref="DomainValidationException">The name is empty, the capacity is not positive or the price is negative.</exception>
     Guid Add(HallDto hall);
 
     /// <summary>
-    /// Повертає список залів, які відповідають мінімальній місткості 
-    /// та не заброньовані на вказаний проміжок часу.
+    /// Returns halls that have at least the minimum capacity
+    /// and are not booked for the given time range.
     /// </summary>
-    /// <param name="minCapacity">Мінімально необхідна місткість залу.</param>
-    /// <param name="startTime">Час початку оренди (опціонально).</param>
-    /// <param name="endTime">Час завершення оренди (опціонально).</param>
-    /// <returns>Колекція вільних конференц-залів.</returns>
+    /// <param name="minCapacity">Minimum required hall capacity.</param>
+    /// <param name="startTime">Rental start time (optional).</param>
+    /// <param name="endTime">Rental end time (optional).</param>
+    /// <returns>Halls that are available.</returns>
     IEnumerable<HallDto> GetAvailable(int minCapacity, DateTime? startTime = null, DateTime? endTime = null);
 
     /// <summary>
-    /// Оформлює бронювання залу з перевіркою часових колізій та динамічним розрахунком вартості.
+    /// Books a hall after checking for time conflicts and calculates the cost using dynamic pricing.
     /// </summary>
-    /// <param name="request">Дані запиту на бронювання (зал, час, послуги).</param>
-    /// <returns>Результат бронювання із загальною сумою та ідентифікатором.</returns>
+    /// <param name="request">Booking request data (hall, time, accessories).</param>
+    /// <returns>The booking result with its id and total cost.</returns>
+    /// <exception cref="DomainValidationException">The hall id is empty or the end time is not later than the start time.</exception>
+    /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
+    /// <exception cref="BookingConflictException">The hall is already booked for an overlapping interval.</exception>
     BookingResponse Book(BookingRequest request);
 
     /// <summary>
-    /// Оновлює інформацію про існуючий зал за його унікальним ідентифікатором.
+    /// Updates an existing hall by its unique id.
     /// </summary>
-    /// <param name="id">Унікальний ідентифікатор залу.</param>
-    /// <param name="updatedHall">Оновлені дані залу.</param>
-    /// <returns>True, якщо оновлення успішне; False, якщо зал не знайдено.</returns>
+    /// <param name="id">Unique id of the hall.</param>
+    /// <param name="updatedHall">Updated hall data.</param>
+    /// <returns>True if the hall was updated; false if the hall was not found.</returns>
     bool Update(Guid id, HallDto updatedHall);
 
     /// <summary>
-    /// Додає одну додаткову послугу до наявного списку послуг залу (без видалення інших).
+    /// Adds a single accessory to the hall's existing list (without removing the others).
     /// </summary>
-    /// <param name="hallId">Унікальний ідентифікатор залу.</param>
-    /// <param name="accessory">Послуга, яку потрібно додати (назва та ціна).</param>
-    /// <returns>True, якщо послугу додано; False, якщо зал не знайдено.</returns>
+    /// <param name="hallId">Unique id of the hall.</param>
+    /// <param name="accessory">The accessory to add (name and price).</param>
+    /// <returns>True if the accessory was added; false if the hall was not found.</returns>
+    /// <exception cref="DomainValidationException">The accessory name is empty or its price is negative.</exception>
     bool AddAccessory(Guid hallId, AccessoryDto accessory);
 
     /// <summary>
-    /// Видаляє конференц-зал із системи за його ідентифікатором.
+    /// Deletes a conference hall by its id.
     /// </summary>
-    /// <param name="id">Унікальний ідентифікатор залу.</param>
-    /// <returns>True, якщо видалення успішне; False, якщо зал не знайдено.</returns>
+    /// <param name="id">Unique id of the hall.</param>
+    /// <returns>True if the hall was deleted; false if the hall was not found.</returns>
     bool Delete(Guid id);
 
     /// <summary>
-    /// Отримання зведеної бізнес-аналітики.
+    /// Returns the summary business analytics.
     /// </summary>
     AnalyticsSummaryDto GetAnalyticsSummary();
 }

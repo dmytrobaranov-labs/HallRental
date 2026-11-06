@@ -1,5 +1,7 @@
 using HallRental.API.Auth;
 using HallRental.API.Data;
+using HallRental.API.Domain.Errors;
+using HallRental.API.ErrorHandling;
 using HallRental.API.Models;
 using HallRental.API.Services;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
@@ -49,6 +51,10 @@ else
 
 builder.Services.AddScoped<IHallService, HallService>();
 
+// Every error response is RFC 7807 ProblemDetails; see ProblemDetailsExceptionHandler for the mapping.
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
+
 // ==========================================
 // 2. JWT (key from configuration / Key Vault, never from code)
 // ==========================================
@@ -56,8 +62,8 @@ var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOption
 if (string.IsNullOrWhiteSpace(jwt.SigningKey) || Encoding.UTF8.GetByteCount(jwt.SigningKey) < 32)
 {
     throw new InvalidOperationException(
-        "Jwt:SigningKey не налаштовано або він коротший за 32 байти. " +
-        "Локально — appsettings.Development.json, в Azure — секрет у Key Vault.");
+        "Jwt:SigningKey is not configured or is shorter than 32 bytes. " +
+        "Locally use appsettings.Development.json; in Azure use a Key Vault secret.");
 }
 
 builder.Services.AddAuthentication("Bearer")
@@ -104,32 +110,18 @@ if (useSql && app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 // 4. SECURITY AND GLOBAL ERROR HANDLING
 // ==========================================
 
+// Global exception handling: domain errors become 400/404/409, anything else a generic 500
+// (no stack traces or internal messages leak to clients). Registered first so it also
+// catches exceptions thrown by every middleware below.
+app.UseExceptionHandler();
+
+// Turns empty error responses (401/403/405, Minimal API binding failures in Production)
+// into ProblemDetails too, via the IProblemDetailsService registered by AddProblemDetails.
+app.UseStatusCodePages();
+
 // App Service terminates TLS at the front end; ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 // lets the app see that the original request came over HTTPS, so redirection works correctly.
 app.UseHttpsRedirection();
-
-// Global exception handling (prevents stack traces from leaking to clients)
-app.UseExceptionHandler(exceptionHandlerApp =>
-{
-    exceptionHandlerApp.Run(async context =>
-    {
-        context.Response.ContentType = "application/json";
-
-        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
-        if (exceptionFeature != null)
-        {
-            context.Response.StatusCode = exceptionFeature.Error switch
-            {
-                KeyNotFoundException => StatusCodes.Status404NotFound,
-                ArgumentException => StatusCodes.Status400BadRequest,
-                _ => StatusCodes.Status500InternalServerError
-            };
-
-            var errorResponse = new { error = exceptionFeature.Error.Message };
-            await context.Response.WriteAsJsonAsync(errorResponse);
-        }
-    });
-});
 
 if (app.Configuration.GetValue("Swagger:Enabled", true))
 {
@@ -160,13 +152,19 @@ app.MapDemoTokenEndpoint(jwt);
 
 var hallsApi = app.MapGroup("/api/v1/halls");
 
+// Same shape as the 404 produced by HallNotFoundException in the exception handler.
+static IResult HallNotFound(Guid id) => Results.Problem(
+    statusCode: StatusCodes.Status404NotFound,
+    title: ProblemTitles.HallNotFound,
+    detail: HallNotFoundException.CreateMessage(id));
+
 hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromQuery] DateTime? startTime, [FromQuery] DateTime? endTime, [FromServices] IHallService hallService) =>
 {
     var halls = hallService.GetAvailable(minCapacity, startTime, endTime);
     return Results.Ok(halls);
 })
-.WithSummary("Пошук доступних залів")
-.WithDescription("Доступно публічно без автентифікації.");
+.WithSummary("Search available halls")
+.WithDescription("Public, no authentication required.");
 
 hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
@@ -174,8 +172,9 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
     return Results.Created($"/api/v1/halls/{id}", new { Id = id });
 })
 .RequireAuthorization("AdminOnly")
-.WithSummary("Додати новий зал")
-.WithDescription("Вимагає токена з роллю Admin.");
+.WithSummary("Add a new hall")
+.WithDescription("Requires a token with the Admin role.")
+.ProducesProblem(StatusCodes.Status400BadRequest);
 
 // Accessories are REPLACED, not merged: to add a service via PUT the client must send
 // the hall's full accessory list (existing + new), otherwise the existing ones are lost.
@@ -183,34 +182,38 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
 hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
     var updated = hallService.Update(id, hall);
-    if (!updated) return Results.NotFound(new { error = "Зал не знайдено" });
-    return Results.Ok(new { message = "Дані залу успішно оновлено" });
+    if (!updated) return HallNotFound(id);
+    return Results.Ok(new { message = "Hall updated successfully." });
 })
 .RequireAuthorization("AdminOnly")
-.WithSummary("Оновити дані залу")
-.WithDescription("Вимагає токена з роллю Admin. Accessories передається повним списком (заміна, не додавання).");
+.WithSummary("Update a hall")
+.WithDescription("Requires a token with the Admin role. Accessories must be sent as the full list (replaced, not merged).")
+.ProducesProblem(StatusCodes.Status404NotFound);
 
 // Unlike PUT /{id}, adds one service without touching the rest of the list.
 // If a service with the same name already exists, its price is updated instead.
 hallsApi.MapPost("/{id:guid}/accessories", (Guid id, [FromBody] AccessoryDto accessory, [FromServices] IHallService hallService) =>
 {
     var added = hallService.AddAccessory(id, accessory);
-    if (!added) return Results.NotFound(new { error = "Зал не знайдено" });
-    return Results.Ok(new { message = "Послугу успішно додано" });
+    if (!added) return HallNotFound(id);
+    return Results.Ok(new { message = "Accessory added successfully." });
 })
 .RequireAuthorization("AdminOnly")
-.WithSummary("Додати послугу до залу")
-.WithDescription("Вимагає токена з роллю Admin. Додає одну послугу без заміни решти списку.");
+.WithSummary("Add an accessory to a hall")
+.WithDescription("Requires a token with the Admin role. Adds a single accessory without replacing the rest of the list.")
+.ProducesProblem(StatusCodes.Status400BadRequest)
+.ProducesProblem(StatusCodes.Status404NotFound);
 
 hallsApi.MapDelete("{id:guid}", (Guid id, [FromServices] IHallService hallService) =>
 {
     var deleted = hallService.Delete(id);
-    if (!deleted) return Results.NotFound(new { error = "Зал не знайдено" });
+    if (!deleted) return HallNotFound(id);
     return Results.NoContent();
 })
 .RequireAuthorization("AdminOnly")
-.WithSummary("Видалити зал")
-.WithDescription("Вимагає токена з роллю Admin.");
+.WithSummary("Delete a hall")
+.WithDescription("Requires a token with the Admin role.")
+.ProducesProblem(StatusCodes.Status404NotFound);
 
 hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHallService hallService) =>
 {
@@ -218,8 +221,11 @@ hallsApi.MapPost("/book", ([FromBody] BookingRequest request, [FromServices] IHa
     return Results.Ok(response);
 })
 .RequireAuthorization()
-.WithSummary("Забронювати зал")
-.WithDescription("Вимагає наявності валідного JWT-токена.");
+.WithSummary("Book a hall")
+.WithDescription("Requires a valid JWT.")
+.ProducesProblem(StatusCodes.Status400BadRequest)
+.ProducesProblem(StatusCodes.Status404NotFound)
+.ProducesProblem(StatusCodes.Status409Conflict);
 
 var analyticsApi = app.MapGroup("/api/v1/analytics").RequireAuthorization("AdminOnly");
 
@@ -228,8 +234,8 @@ analyticsApi.MapGet("/summary", ([FromServices] IHallService hallService) =>
     var summary = hallService.GetAnalyticsSummary();
     return Results.Ok(summary);
 })
-.WithSummary("Отримання зведеної аналітики")
-.WithDescription("Вимагає токена з роллю Admin.");
+.WithSummary("Get summary analytics")
+.WithDescription("Requires a token with the Admin role.");
 
 app.Run();
 
