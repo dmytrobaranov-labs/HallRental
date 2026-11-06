@@ -1,4 +1,5 @@
 using HallRental.API.Data;
+using HallRental.API.Domain;
 using HallRental.API.Domain.Errors;
 using HallRental.API.Models;
 
@@ -32,16 +33,10 @@ public class HallService : IHallService
     /// </summary>
     public Guid Add(HallDto hall)
     {
-        if (string.IsNullOrWhiteSpace(hall.Name))
-            throw new DomainValidationException("Hall name must not be empty.");
-
-        if (hall.Capacity <= 0)
-            throw new DomainValidationException("Hall capacity must be greater than zero.");
-
-        if (hall.BasePricePerHour < 0)
-            throw new DomainValidationException("Base price must not be negative.");
+        HallValidator.Validate(hall);
 
         hall.Id = Guid.NewGuid();
+        hall.Accessories = NormalizeAccessories(hall.Accessories);
         _repository.AddHall(hall);
         _repository.SaveChanges();
         return hall.Id;
@@ -79,11 +74,12 @@ public class HallService : IHallService
         if (request.HallId == Guid.Empty)
             throw new DomainValidationException("Hall id must be specified.");
 
-        var hall = _repository.Halls.FirstOrDefault(h => h.Id == request.HallId);
-        if (hall == null)
-            throw new HallNotFoundException(request.HallId);
+        var hall = GetHall(request.HallId);
 
         ValidateBookingTime(request.StartTime, request.EndTime);
+
+        // JSON "selectedAccessories": null bypasses the property initializer; treat it as "none".
+        var selectedAccessories = ResolveSelectedAccessories(hall, request.SelectedAccessories ?? []);
 
         bool isAlreadyBooked = _repository.Bookings.Any(b =>
             b.HallId == request.HallId &&
@@ -96,7 +92,7 @@ public class HallService : IHallService
         }
 
         decimal totalHallCost = CalculateTotalHallCost(hall.BasePricePerHour, request.StartTime, request.EndTime);
-        decimal accessoriesCost = CalculateAccessoriesCost(hall.Accessories, request.SelectedAccessories);
+        decimal accessoriesCost = selectedAccessories.Sum(a => a.Price);
 
         var booking = new Booking
         {
@@ -104,7 +100,8 @@ public class HallService : IHallService
             HallId = request.HallId,
             StartTime = request.StartTime,
             EndTime = request.EndTime,
-            SelectedAccessories = request.SelectedAccessories.ToList(),
+            // Canonical hall names, so analytics never sees "wi-fi" and "Wi-Fi" as different services.
+            SelectedAccessories = selectedAccessories.Select(a => a.Name).ToList(),
             TotalCost = Math.Round(totalHallCost + accessoriesCost, 2)
         };
 
@@ -122,62 +119,53 @@ public class HallService : IHallService
     /// <summary>
     /// Updates an existing hall.
     /// </summary>
-    public bool Update(Guid id, HallDto updatedHall)
+    public void Update(Guid id, HallDto updatedHall)
     {
-        var hall = _repository.Halls.FirstOrDefault(h => h.Id == id);
-        if (hall == null)
-            return false;
+        HallValidator.Validate(updatedHall);
+
+        var hall = GetHall(id);
 
         hall.Name = updatedHall.Name;
         hall.Capacity = updatedHall.Capacity;
         hall.BasePricePerHour = updatedHall.BasePricePerHour;
-        hall.Accessories = updatedHall.Accessories;
+        hall.Accessories = NormalizeAccessories(updatedHall.Accessories);
 
         _repository.SaveChanges();
-        return true;
     }
 
     /// <summary>
     /// Adds a single accessory to the hall's existing list (without removing the others).
     /// </summary>
-    public bool AddAccessory(Guid hallId, AccessoryDto accessory)
+    public void AddAccessory(Guid hallId, AccessoryDto accessory)
     {
-        var hall = _repository.Halls.FirstOrDefault(h => h.Id == hallId);
-        if (hall == null)
-            return false;
+        HallValidator.ValidateAccessory(accessory);
 
-        if (string.IsNullOrWhiteSpace(accessory.Name))
-            throw new DomainValidationException("Accessory name must not be empty.");
+        var hall = GetHall(hallId);
 
-        if (accessory.Price < 0)
-            throw new DomainValidationException("Accessory price must not be negative.");
-
-        var existing = hall.Accessories.FirstOrDefault(a => a.Name == accessory.Name);
+        var normalized = Normalize(accessory);
+        var existing = hall.Accessories.FirstOrDefault(a =>
+            AccessoryNames.Comparer.Equals(AccessoryNames.Normalize(a.Name), normalized.Name));
         if (existing != null)
         {
-            existing.Price = accessory.Price;
+            existing.Price = normalized.Price;
         }
         else
         {
-            hall.Accessories.Add(accessory);
+            hall.Accessories.Add(normalized);
         }
 
         _repository.SaveChanges();
-        return true;
     }
 
     /// <summary>
     /// Deletes a conference hall by its id.
     /// </summary>
-    public bool Delete(Guid id)
+    public void Delete(Guid id)
     {
-        var hall = _repository.Halls.FirstOrDefault(h => h.Id == id);
-        if (hall == null)
-            return false;
+        var hall = GetHall(id);
 
         _repository.RemoveHall(hall);
         _repository.SaveChanges();
-        return true;
     }
 
     /// <summary>
@@ -209,10 +197,47 @@ public class HallService : IHallService
         };
     }
 
+    private static List<AccessoryDto> NormalizeAccessories(IEnumerable<AccessoryDto> accessories) =>
+        accessories.Select(Normalize).ToList();
+
+    private static AccessoryDto Normalize(AccessoryDto accessory) =>
+        new() { Name = AccessoryNames.Normalize(accessory.Name), Price = accessory.Price };
+
+    private HallDto GetHall(Guid id) =>
+        _repository.Halls.FirstOrDefault(h => h.Id == id) ?? throw new HallNotFoundException(id);
+
     private static void ValidateBookingTime(DateTime start, DateTime end)
     {
         if (end <= start)
             throw new DomainValidationException("Booking end time must be later than start time.");
+    }
+
+    /// <summary>
+    /// Maps the selected names to the hall's own accessories, in selection order and without repeats.
+    /// </summary>
+    /// <exception cref="DomainValidationException">A selected name is not offered by the hall.</exception>
+    private static List<AccessoryDto> ResolveSelectedAccessories(HallDto hall, List<string> selectedNames)
+    {
+        // DistinctBy: halls saved before names were validated may still hold duplicates.
+        var hallAccessoriesByName = hall.Accessories
+            .DistinctBy(a => AccessoryNames.Normalize(a.Name), AccessoryNames.Comparer)
+            .ToDictionary(a => AccessoryNames.Normalize(a.Name), AccessoryNames.Comparer);
+
+        var normalizedNames = selectedNames
+            .Select(AccessoryNames.Normalize)
+            .Distinct(AccessoryNames.Comparer)
+            .ToList();
+
+        var unknownNames = normalizedNames
+            .Where(name => !hallAccessoriesByName.ContainsKey(name))
+            .Select(name => $"'{name}'")
+            .ToList();
+
+        if (unknownNames.Count > 0)
+            throw new DomainValidationException(
+                $"The hall does not offer these accessories: {string.Join(", ", unknownNames)}.");
+
+        return normalizedNames.Select(name => hallAccessoriesByName[name]).ToList();
     }
 
     private decimal CalculateTotalHallCost(decimal basePrice, DateTime start, DateTime end)
@@ -230,12 +255,5 @@ public class HallService : IHallService
         }
 
         return totalCost;
-    }
-
-    private static decimal CalculateAccessoriesCost(List<AccessoryDto> hallAccessories, List<string> selectedAccessories)
-    {
-        return hallAccessories
-            .Where(a => selectedAccessories.Contains(a.Name))
-            .Sum(a => a.Price);
     }
 }

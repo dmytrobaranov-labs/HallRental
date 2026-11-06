@@ -7,5 +7,5 @@ public sealed class HallNotFoundException(Guid hallId) : Exception(CreateMessage
 {
     public Guid HallId { get; } = hallId;
 
-    public static string CreateMessage(Guid hallId) => $"Hall '{hallId}' was not found.";
+    private static string CreateMessage(Guid hallId) => $"Hall '{hallId}' was not found.";
 }

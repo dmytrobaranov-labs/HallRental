@@ -64,6 +64,20 @@ public class ErrorHandlingTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Book_UnknownAccessory_Returns400ProblemDetailsListingUnknownNames()
+    {
+        var client = CreateClient(TestTokens.UserRole);
+        var hallId = await CreateHallAsync(CreateClient(TestTokens.AdminRole));
+        var request = BookingFor(hallId, BookingStart, hours: 2);
+        request.SelectedAccessories = ["Catering"];
+
+        var response = await client.PostAsJsonAsync(BookRoute, request);
+
+        var problem = await AssertProblemDetailsAsync(response, HttpStatusCode.BadRequest);
+        Assert.Contains("Catering", problem.Detail);
+    }
+
+    [Fact]
     public async Task Book_MalformedJson_Returns400ProblemDetails()
     {
         var client = CreateClient(TestTokens.UserRole);
@@ -80,6 +94,38 @@ public class ErrorHandlingTests : IClassFixture<WebApplicationFactory<Program>>
         var client = CreateClient(TestTokens.AdminRole);
 
         var response = await client.PostAsJsonAsync(HallsRoute, new HallDto { Name = "Hall", Capacity = 0, BasePricePerHour = 100 });
+
+        await AssertProblemDetailsAsync(response, HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData("", 10, 100)]
+    [InlineData("Hall", 0, 100)]
+    [InlineData("Hall", 10, -1)]
+    public async Task UpdateHall_InvalidFields_Returns400ProblemDetails(string name, int capacity, int basePrice)
+    {
+        var client = CreateClient(TestTokens.AdminRole);
+        var hallId = await CreateHallAsync(client);
+
+        var response = await client.PutAsJsonAsync($"{HallsRoute}/{hallId}", new HallDto { Name = name, Capacity = capacity, BasePricePerHour = basePrice });
+
+        await AssertProblemDetailsAsync(response, HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateHall_DuplicateAccessoryNamesIgnoringCase_Returns400ProblemDetails()
+    {
+        var client = CreateClient(TestTokens.AdminRole);
+        var hallId = await CreateHallAsync(client);
+        var hall = new HallDto
+        {
+            Name = "Hall",
+            Capacity = 10,
+            BasePricePerHour = 100,
+            Accessories = [new AccessoryDto { Name = "Wi-Fi", Price = 10 }, new AccessoryDto { Name = "wi-fi", Price = 20 }]
+        };
+
+        var response = await client.PutAsJsonAsync($"{HallsRoute}/{hallId}", hall);
 
         await AssertProblemDetailsAsync(response, HttpStatusCode.BadRequest);
     }
@@ -173,9 +219,9 @@ public class ErrorHandlingTests : IClassFixture<WebApplicationFactory<Program>>
         public Guid Add(HallDto hall) => throw Failure();
         public IEnumerable<HallDto> GetAvailable(int minCapacity, DateTime? startTime = null, DateTime? endTime = null) => throw Failure();
         public BookingResponse Book(BookingRequest request) => throw Failure();
-        public bool Update(Guid id, HallDto updatedHall) => throw Failure();
-        public bool AddAccessory(Guid hallId, AccessoryDto accessory) => throw Failure();
-        public bool Delete(Guid id) => throw Failure();
+        public void Update(Guid id, HallDto updatedHall) => throw Failure();
+        public void AddAccessory(Guid hallId, AccessoryDto accessory) => throw Failure();
+        public void Delete(Guid id) => throw Failure();
         public AnalyticsSummaryDto GetAnalyticsSummary() => throw Failure();
 
         private static InvalidOperationException Failure() => new(SensitiveMessage);

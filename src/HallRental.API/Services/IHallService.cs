@@ -13,7 +13,10 @@ public interface IHallService
     /// </summary>
     /// <param name="hall">Data of the new hall.</param>
     /// <returns>The generated unique id of the hall.</returns>
-    /// <exception cref="DomainValidationException">The name is empty, the capacity is not positive or the price is negative.</exception>
+    /// <exception cref="DomainValidationException">
+    /// The name is empty, the capacity is not positive, the price is negative,
+    /// or an accessory has an empty name, a negative price or a name repeated ignoring case.
+    /// </exception>
     Guid Add(HallDto hall);
 
     /// <summary>
@@ -31,7 +34,10 @@ public interface IHallService
     /// </summary>
     /// <param name="request">Booking request data (hall, time, accessories).</param>
     /// <returns>The booking result with its id and total cost.</returns>
-    /// <exception cref="DomainValidationException">The hall id is empty or the end time is not later than the start time.</exception>
+    /// <exception cref="DomainValidationException">
+    /// The hall id is empty, the end time is not later than the start time,
+    /// or a selected accessory is not offered by the hall (names compared ignoring case).
+    /// </exception>
     /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
     /// <exception cref="BookingConflictException">The hall is already booked for an overlapping interval.</exception>
     BookingResponse Book(BookingRequest request);
@@ -41,24 +47,25 @@ public interface IHallService
     /// </summary>
     /// <param name="id">Unique id of the hall.</param>
     /// <param name="updatedHall">Updated hall data.</param>
-    /// <returns>True if the hall was updated; false if the hall was not found.</returns>
-    bool Update(Guid id, HallDto updatedHall);
+    /// <exception cref="DomainValidationException">The updated data breaks the same rules as <see cref="Add"/>.</exception>
+    /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
+    void Update(Guid id, HallDto updatedHall);
 
     /// <summary>
     /// Adds a single accessory to the hall's existing list (without removing the others).
     /// </summary>
     /// <param name="hallId">Unique id of the hall.</param>
     /// <param name="accessory">The accessory to add (name and price).</param>
-    /// <returns>True if the accessory was added; false if the hall was not found.</returns>
     /// <exception cref="DomainValidationException">The accessory name is empty or its price is negative.</exception>
-    bool AddAccessory(Guid hallId, AccessoryDto accessory);
+    /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
+    void AddAccessory(Guid hallId, AccessoryDto accessory);
 
     /// <summary>
     /// Deletes a conference hall by its id.
     /// </summary>
     /// <param name="id">Unique id of the hall.</param>
-    /// <returns>True if the hall was deleted; false if the hall was not found.</returns>
-    bool Delete(Guid id);
+    /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
+    void Delete(Guid id);
 
     /// <summary>
     /// Returns the summary business analytics.
