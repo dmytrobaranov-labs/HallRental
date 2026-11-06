@@ -512,6 +512,13 @@ public class HallServiceTests
         Assert.Equal(500, response.TotalCost);
     }
 
+    [Fact]
+    public void AddAccessory_InvalidAccessoryForNonExistentHall_ThrowsDomainValidationException()
+    {
+        Assert.Throws<DomainValidationException>(() =>
+            _service.AddAccessory(Guid.NewGuid(), new AccessoryDto { Name = "", Price = 700 }));
+    }
+
     private HallDto GetHall(Guid hallId) => _service.GetAvailable(0).First(h => h.Id == hallId);
 
     private Guid AddValidHall() => _service.Add(ValidHallWith());

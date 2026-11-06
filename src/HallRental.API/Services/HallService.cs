@@ -138,9 +138,9 @@ public class HallService : IHallService
     /// </summary>
     public void AddAccessory(Guid hallId, AccessoryDto accessory)
     {
-        var hall = GetHall(hallId);
-
         HallValidator.ValidateAccessory(accessory);
+
+        var hall = GetHall(hallId);
 
         var normalized = Normalize(accessory);
         var existing = hall.Accessories.FirstOrDefault(a =>
