@@ -36,6 +36,7 @@ public class HallService : IHallService
         HallValidator.Validate(hall);
 
         hall.Id = Guid.NewGuid();
+        hall.Accessories = NormalizeAccessories(hall.Accessories);
         _repository.AddHall(hall);
         _repository.SaveChanges();
         return hall.Id;
@@ -127,7 +128,7 @@ public class HallService : IHallService
         hall.Name = updatedHall.Name;
         hall.Capacity = updatedHall.Capacity;
         hall.BasePricePerHour = updatedHall.BasePricePerHour;
-        hall.Accessories = updatedHall.Accessories;
+        hall.Accessories = NormalizeAccessories(updatedHall.Accessories);
 
         _repository.SaveChanges();
     }
@@ -141,14 +142,16 @@ public class HallService : IHallService
 
         HallValidator.ValidateAccessory(accessory);
 
-        var existing = hall.Accessories.FirstOrDefault(a => HallValidator.AccessoryNameComparer.Equals(a.Name, accessory.Name));
+        var normalized = Normalize(accessory);
+        var existing = hall.Accessories.FirstOrDefault(a =>
+            AccessoryNames.Comparer.Equals(AccessoryNames.Normalize(a.Name), normalized.Name));
         if (existing != null)
         {
-            existing.Price = accessory.Price;
+            existing.Price = normalized.Price;
         }
         else
         {
-            hall.Accessories.Add(accessory);
+            hall.Accessories.Add(normalized);
         }
 
         _repository.SaveChanges();
@@ -194,6 +197,12 @@ public class HallService : IHallService
         };
     }
 
+    private static List<AccessoryDto> NormalizeAccessories(IEnumerable<AccessoryDto> accessories) =>
+        accessories.Select(Normalize).ToList();
+
+    private static AccessoryDto Normalize(AccessoryDto accessory) =>
+        new() { Name = AccessoryNames.Normalize(accessory.Name), Price = accessory.Price };
+
     private HallDto GetHall(Guid id) =>
         _repository.Halls.FirstOrDefault(h => h.Id == id) ?? throw new HallNotFoundException(id);
 
@@ -205,11 +214,14 @@ public class HallService : IHallService
 
     private static void EnsureAccessoriesExist(HallDto hall, List<string> selectedAccessories)
     {
-        var hallAccessoryNames = hall.Accessories.Select(a => a.Name).ToHashSet(HallValidator.AccessoryNameComparer);
+        var hallAccessoryNames = hall.Accessories
+            .Select(a => AccessoryNames.Normalize(a.Name))
+            .ToHashSet(AccessoryNames.Comparer);
 
         var unknownNames = selectedAccessories
+            .Select(AccessoryNames.Normalize)
             .Where(name => !hallAccessoryNames.Contains(name))
-            .Distinct(HallValidator.AccessoryNameComparer)
+            .Distinct(AccessoryNames.Comparer)
             .Select(name => $"'{name}'")
             .ToList();
 
@@ -237,10 +249,12 @@ public class HallService : IHallService
 
     private static decimal CalculateAccessoriesCost(List<AccessoryDto> hallAccessories, List<string> selectedAccessories)
     {
-        var selectedNames = selectedAccessories.ToHashSet(HallValidator.AccessoryNameComparer);
+        var selectedNames = selectedAccessories
+            .Select(AccessoryNames.Normalize)
+            .ToHashSet(AccessoryNames.Comparer);
 
         return hallAccessories
-            .Where(a => selectedNames.Contains(a.Name))
+            .Where(a => selectedNames.Contains(AccessoryNames.Normalize(a.Name)))
             .Sum(a => a.Price);
     }
 }

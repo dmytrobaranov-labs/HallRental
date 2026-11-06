@@ -9,11 +9,6 @@ namespace HallRental.API.Domain;
 /// </summary>
 public static class HallValidator
 {
-    /// <summary>
-    /// Accessories are matched by name ignoring case everywhere ("Wi-Fi" and "wi-fi" are the same service).
-    /// </summary>
-    public static readonly StringComparer AccessoryNameComparer = StringComparer.OrdinalIgnoreCase;
-
     /// <exception cref="DomainValidationException">The hall or one of its accessories breaks a rule.</exception>
     public static void Validate(HallDto hall)
     {
@@ -52,7 +47,7 @@ public static class HallValidator
     private static void EnsureUniqueAccessoryNames(IEnumerable<AccessoryDto> accessories)
     {
         var duplicateNames = accessories
-            .GroupBy(a => a.Name, AccessoryNameComparer)
+            .GroupBy(a => AccessoryNames.Normalize(a.Name), AccessoryNames.Comparer)
             .Where(group => group.Count() > 1)
             .Select(group => $"'{group.Key}'")
             .ToList();
