@@ -34,7 +34,10 @@ public interface IHallService
     /// </summary>
     /// <param name="request">Booking request data (hall, time, accessories).</param>
     /// <returns>The booking result with its id and total cost.</returns>
-    /// <exception cref="DomainValidationException">The hall id is empty or the end time is not later than the start time.</exception>
+    /// <exception cref="DomainValidationException">
+    /// The hall id is empty, the end time is not later than the start time,
+    /// or a selected accessory is not offered by the hall (names compared ignoring case).
+    /// </exception>
     /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
     /// <exception cref="BookingConflictException">The hall is already booked for an overlapping interval.</exception>
     BookingResponse Book(BookingRequest request);

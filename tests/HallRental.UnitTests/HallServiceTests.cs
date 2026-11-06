@@ -363,6 +363,40 @@ public class HallServiceTests
         Assert.Equal(500, response.TotalCost);
     }
 
+    [Fact]
+    public void Book_UnknownAccessories_ThrowsWithUnknownNamesInMessage()
+    {
+        var hallId = _service.Add(ValidHallWith(new AccessoryDto { Name = "Wi-Fi", Price = 300 }));
+
+        var exception = Assert.Throws<DomainValidationException>(() => _service.Book(new BookingRequest
+        {
+            HallId = hallId,
+            StartTime = new DateTime(2026, 9, 1, 10, 0, 0),
+            EndTime = new DateTime(2026, 9, 1, 12, 0, 0),
+            SelectedAccessories = ["wi-fi", "Catering", "Projector"]
+        }));
+
+        Assert.Contains("Catering", exception.Message);
+        Assert.Contains("Projector", exception.Message);
+        Assert.DoesNotContain("wi-fi", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Book_UnknownAccessory_DoesNotCreateBooking()
+    {
+        var hallId = AddValidHall();
+
+        Assert.Throws<DomainValidationException>(() => _service.Book(new BookingRequest
+        {
+            HallId = hallId,
+            StartTime = new DateTime(2026, 9, 1, 10, 0, 0),
+            EndTime = new DateTime(2026, 9, 1, 12, 0, 0),
+            SelectedAccessories = ["Catering"]
+        }));
+
+        Assert.Equal(0, _service.GetAnalyticsSummary().TotalBookings);
+    }
+
     private Guid AddValidHall() => _service.Add(ValidHallWith());
 
     private static HallDto ValidHallWith(params AccessoryDto[] accessories) => new()

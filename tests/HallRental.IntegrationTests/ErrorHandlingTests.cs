@@ -64,6 +64,20 @@ public class ErrorHandlingTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Book_UnknownAccessory_Returns400ProblemDetailsListingUnknownNames()
+    {
+        var client = CreateClient(TestTokens.UserRole);
+        var hallId = await CreateHallAsync(CreateClient(TestTokens.AdminRole));
+        var request = BookingFor(hallId, BookingStart, hours: 2);
+        request.SelectedAccessories = ["Catering"];
+
+        var response = await client.PostAsJsonAsync(BookRoute, request);
+
+        var problem = await AssertProblemDetailsAsync(response, HttpStatusCode.BadRequest);
+        Assert.Contains("Catering", problem.Detail);
+    }
+
+    [Fact]
     public async Task Book_MalformedJson_Returns400ProblemDetails()
     {
         var client = CreateClient(TestTokens.UserRole);

@@ -78,6 +78,7 @@ public class HallService : IHallService
             throw new HallNotFoundException(request.HallId);
 
         ValidateBookingTime(request.StartTime, request.EndTime);
+        EnsureAccessoriesExist(hall, request.SelectedAccessories);
 
         bool isAlreadyBooked = _repository.Bookings.Any(b =>
             b.HallId == request.HallId &&
@@ -205,6 +206,21 @@ public class HallService : IHallService
     {
         if (end <= start)
             throw new DomainValidationException("Booking end time must be later than start time.");
+    }
+
+    private static void EnsureAccessoriesExist(HallDto hall, List<string> selectedAccessories)
+    {
+        var hallAccessoryNames = hall.Accessories.Select(a => a.Name).ToHashSet(HallValidator.AccessoryNameComparer);
+
+        var unknownNames = selectedAccessories
+            .Where(name => !hallAccessoryNames.Contains(name))
+            .Distinct(HallValidator.AccessoryNameComparer)
+            .Select(name => $"'{name}'")
+            .ToList();
+
+        if (unknownNames.Count > 0)
+            throw new DomainValidationException(
+                $"The hall does not offer these accessories: {string.Join(", ", unknownNames)}.");
     }
 
     private decimal CalculateTotalHallCost(decimal basePrice, DateTime start, DateTime end)
