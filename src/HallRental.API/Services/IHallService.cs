@@ -47,25 +47,25 @@ public interface IHallService
     /// </summary>
     /// <param name="id">Unique id of the hall.</param>
     /// <param name="updatedHall">Updated hall data.</param>
-    /// <returns>True if the hall was updated; false if the hall was not found.</returns>
     /// <exception cref="DomainValidationException">The updated data breaks the same rules as <see cref="Add"/>.</exception>
-    bool Update(Guid id, HallDto updatedHall);
+    /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
+    void Update(Guid id, HallDto updatedHall);
 
     /// <summary>
     /// Adds a single accessory to the hall's existing list (without removing the others).
     /// </summary>
     /// <param name="hallId">Unique id of the hall.</param>
     /// <param name="accessory">The accessory to add (name and price).</param>
-    /// <returns>True if the accessory was added; false if the hall was not found.</returns>
     /// <exception cref="DomainValidationException">The accessory name is empty or its price is negative.</exception>
-    bool AddAccessory(Guid hallId, AccessoryDto accessory);
+    /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
+    void AddAccessory(Guid hallId, AccessoryDto accessory);
 
     /// <summary>
     /// Deletes a conference hall by its id.
     /// </summary>
     /// <param name="id">Unique id of the hall.</param>
-    /// <returns>True if the hall was deleted; false if the hall was not found.</returns>
-    bool Delete(Guid id);
+    /// <exception cref="HallNotFoundException">The hall does not exist.</exception>
+    void Delete(Guid id);
 
     /// <summary>
     /// Returns the summary business analytics.

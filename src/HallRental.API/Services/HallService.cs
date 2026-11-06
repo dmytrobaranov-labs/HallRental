@@ -73,9 +73,7 @@ public class HallService : IHallService
         if (request.HallId == Guid.Empty)
             throw new DomainValidationException("Hall id must be specified.");
 
-        var hall = _repository.Halls.FirstOrDefault(h => h.Id == request.HallId);
-        if (hall == null)
-            throw new HallNotFoundException(request.HallId);
+        var hall = GetHall(request.HallId);
 
         ValidateBookingTime(request.StartTime, request.EndTime);
         EnsureAccessoriesExist(hall, request.SelectedAccessories);
@@ -117,13 +115,11 @@ public class HallService : IHallService
     /// <summary>
     /// Updates an existing hall.
     /// </summary>
-    public bool Update(Guid id, HallDto updatedHall)
+    public void Update(Guid id, HallDto updatedHall)
     {
         HallValidator.Validate(updatedHall);
 
-        var hall = _repository.Halls.FirstOrDefault(h => h.Id == id);
-        if (hall == null)
-            return false;
+        var hall = GetHall(id);
 
         hall.Name = updatedHall.Name;
         hall.Capacity = updatedHall.Capacity;
@@ -131,17 +127,14 @@ public class HallService : IHallService
         hall.Accessories = updatedHall.Accessories;
 
         _repository.SaveChanges();
-        return true;
     }
 
     /// <summary>
     /// Adds a single accessory to the hall's existing list (without removing the others).
     /// </summary>
-    public bool AddAccessory(Guid hallId, AccessoryDto accessory)
+    public void AddAccessory(Guid hallId, AccessoryDto accessory)
     {
-        var hall = _repository.Halls.FirstOrDefault(h => h.Id == hallId);
-        if (hall == null)
-            return false;
+        var hall = GetHall(hallId);
 
         HallValidator.ValidateAccessory(accessory);
 
@@ -156,21 +149,17 @@ public class HallService : IHallService
         }
 
         _repository.SaveChanges();
-        return true;
     }
 
     /// <summary>
     /// Deletes a conference hall by its id.
     /// </summary>
-    public bool Delete(Guid id)
+    public void Delete(Guid id)
     {
-        var hall = _repository.Halls.FirstOrDefault(h => h.Id == id);
-        if (hall == null)
-            return false;
+        var hall = GetHall(id);
 
         _repository.RemoveHall(hall);
         _repository.SaveChanges();
-        return true;
     }
 
     /// <summary>
@@ -201,6 +190,9 @@ public class HallService : IHallService
             MostPopularHall = popularHall?.Name ?? "Unknown"
         };
     }
+
+    private HallDto GetHall(Guid id) =>
+        _repository.Halls.FirstOrDefault(h => h.Id == id) ?? throw new HallNotFoundException(id);
 
     private static void ValidateBookingTime(DateTime start, DateTime end)
     {

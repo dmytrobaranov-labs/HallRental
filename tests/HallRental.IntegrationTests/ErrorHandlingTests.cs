@@ -219,9 +219,9 @@ public class ErrorHandlingTests : IClassFixture<WebApplicationFactory<Program>>
         public Guid Add(HallDto hall) => throw Failure();
         public IEnumerable<HallDto> GetAvailable(int minCapacity, DateTime? startTime = null, DateTime? endTime = null) => throw Failure();
         public BookingResponse Book(BookingRequest request) => throw Failure();
-        public bool Update(Guid id, HallDto updatedHall) => throw Failure();
-        public bool AddAccessory(Guid hallId, AccessoryDto accessory) => throw Failure();
-        public bool Delete(Guid id) => throw Failure();
+        public void Update(Guid id, HallDto updatedHall) => throw Failure();
+        public void AddAccessory(Guid hallId, AccessoryDto accessory) => throw Failure();
+        public void Delete(Guid id) => throw Failure();
         public AnalyticsSummaryDto GetAnalyticsSummary() => throw Failure();
 
         private static InvalidOperationException Failure() => new(SensitiveMessage);

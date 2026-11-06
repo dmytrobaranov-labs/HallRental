@@ -1,6 +1,5 @@
 using HallRental.API.Auth;
 using HallRental.API.Data;
-using HallRental.API.Domain.Errors;
 using HallRental.API.ErrorHandling;
 using HallRental.API.Models;
 using HallRental.API.Services;
@@ -152,12 +151,6 @@ app.MapDemoTokenEndpoint(jwt);
 
 var hallsApi = app.MapGroup("/api/v1/halls");
 
-// Same shape as the 404 produced by HallNotFoundException in the exception handler.
-static IResult HallNotFound(Guid id) => Results.Problem(
-    statusCode: StatusCodes.Status404NotFound,
-    title: ProblemTitles.HallNotFound,
-    detail: HallNotFoundException.CreateMessage(id));
-
 hallsApi.MapGet("/", ([FromQuery] int minCapacity, [FromQuery] DateTime? startTime, [FromQuery] DateTime? endTime, [FromServices] IHallService hallService) =>
 {
     var halls = hallService.GetAvailable(minCapacity, startTime, endTime);
@@ -181,8 +174,7 @@ hallsApi.MapPost("/", ([FromBody] HallDto hall, [FromServices] IHallService hall
 // Use POST /{id}/accessories to add a single service.
 hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] IHallService hallService) =>
 {
-    var updated = hallService.Update(id, hall);
-    if (!updated) return HallNotFound(id);
+    hallService.Update(id, hall);
     return Results.Ok(new { message = "Hall updated successfully." });
 })
 .RequireAuthorization("AdminOnly")
@@ -195,8 +187,7 @@ hallsApi.MapPut("/{id:guid}", (Guid id, [FromBody] HallDto hall, [FromServices] 
 // If a service with the same name already exists, its price is updated instead.
 hallsApi.MapPost("/{id:guid}/accessories", (Guid id, [FromBody] AccessoryDto accessory, [FromServices] IHallService hallService) =>
 {
-    var added = hallService.AddAccessory(id, accessory);
-    if (!added) return HallNotFound(id);
+    hallService.AddAccessory(id, accessory);
     return Results.Ok(new { message = "Accessory added successfully." });
 })
 .RequireAuthorization("AdminOnly")
@@ -207,8 +198,7 @@ hallsApi.MapPost("/{id:guid}/accessories", (Guid id, [FromBody] AccessoryDto acc
 
 hallsApi.MapDelete("{id:guid}", (Guid id, [FromServices] IHallService hallService) =>
 {
-    var deleted = hallService.Delete(id);
-    if (!deleted) return HallNotFound(id);
+    hallService.Delete(id);
     return Results.NoContent();
 })
 .RequireAuthorization("AdminOnly")

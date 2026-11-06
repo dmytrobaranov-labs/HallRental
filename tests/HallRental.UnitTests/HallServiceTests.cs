@@ -139,7 +139,7 @@ public class HallServiceTests
     {
         var hallId = _service.Add(new HallDto { Name = "Старий зал", Capacity = 20, BasePricePerHour = 800 });
 
-        var updated = _service.Update(hallId, new HallDto
+        _service.Update(hallId, new HallDto
         {
             Name = "Новий зал",
             Capacity = 60,
@@ -148,18 +148,20 @@ public class HallServiceTests
 
         var hall = _service.GetAvailable(0).First(h => h.Id == hallId);
 
-        Assert.True(updated);
         Assert.Equal("Новий зал", hall.Name);
         Assert.Equal(60, hall.Capacity);
         Assert.Equal(2500, hall.BasePricePerHour);
     }
 
     [Fact]
-    public void Update_ShouldReturnFalse_WhenHallDoesNotExist()
+    public void Update_NonExistentHall_ThrowsHallNotFoundException()
     {
-        var updated = _service.Update(Guid.NewGuid(), new HallDto { Name = "X", Capacity = 1, BasePricePerHour = 1 });
+        var missingHallId = Guid.NewGuid();
 
-        Assert.False(updated);
+        var exception = Assert.Throws<HallNotFoundException>(() =>
+            _service.Update(missingHallId, new HallDto { Name = "X", Capacity = 1, BasePricePerHour = 1 }));
+
+        Assert.Equal(missingHallId, exception.HallId);
     }
 
     [Fact]
@@ -173,10 +175,9 @@ public class HallServiceTests
             Accessories = new List<AccessoryDto> { new AccessoryDto { Name = "Проєктор", Price = 500 } }
         });
 
-        var added = _service.AddAccessory(hallId, new AccessoryDto { Name = "Звук", Price = 700 });
+        _service.AddAccessory(hallId, new AccessoryDto { Name = "Звук", Price = 700 });
         var hall = _service.GetAvailable(0).First(h => h.Id == hallId);
 
-        Assert.True(added);
         Assert.Equal(2, hall.Accessories.Count);
         Assert.Contains(hall.Accessories, a => a.Name == "Проєктор" && a.Price == 500);
         Assert.Contains(hall.Accessories, a => a.Name == "Звук" && a.Price == 700);
@@ -193,20 +194,42 @@ public class HallServiceTests
             Accessories = new List<AccessoryDto> { new AccessoryDto { Name = "Звук", Price = 500 } }
         });
 
-        var added = _service.AddAccessory(hallId, new AccessoryDto { Name = "Звук", Price = 700 });
+        _service.AddAccessory(hallId, new AccessoryDto { Name = "Звук", Price = 700 });
         var hall = _service.GetAvailable(0).First(h => h.Id == hallId);
 
-        Assert.True(added);
         Assert.Single(hall.Accessories);
         Assert.Equal(700, hall.Accessories[0].Price);
     }
 
     [Fact]
-    public void AddAccessory_ShouldReturnFalse_WhenHallDoesNotExist()
+    public void AddAccessory_NonExistentHall_ThrowsHallNotFoundException()
     {
-        var added = _service.AddAccessory(Guid.NewGuid(), new AccessoryDto { Name = "Звук", Price = 700 });
+        var missingHallId = Guid.NewGuid();
 
-        Assert.False(added);
+        var exception = Assert.Throws<HallNotFoundException>(() =>
+            _service.AddAccessory(missingHallId, new AccessoryDto { Name = "Звук", Price = 700 }));
+
+        Assert.Equal(missingHallId, exception.HallId);
+    }
+
+    [Fact]
+    public void Delete_ExistingHall_RemovesHall()
+    {
+        var hallId = AddValidHall();
+
+        _service.Delete(hallId);
+
+        Assert.DoesNotContain(_service.GetAvailable(0), h => h.Id == hallId);
+    }
+
+    [Fact]
+    public void Delete_NonExistentHall_ThrowsHallNotFoundException()
+    {
+        var missingHallId = Guid.NewGuid();
+
+        var exception = Assert.Throws<HallNotFoundException>(() => _service.Delete(missingHallId));
+
+        Assert.Equal(missingHallId, exception.HallId);
     }
 
     [Fact]
